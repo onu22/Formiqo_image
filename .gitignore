@@ -1,0 +1,46 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Testing / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local API job output (uploads and converted artifacts)
+data/
+
+# User PDFs / scratch (keep repo free of large binaries)
+*.pdf
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
