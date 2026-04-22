@@ -33,3 +33,33 @@ class Settings(BaseSettings):
         default="",
         description="Comma-separated browser origins for CORS; empty disables the middleware.",
     )
+    openai_api_key: str = Field(
+        default="",
+        description="OpenAI API key used for field grounding endpoint.",
+    )
+    openai_model: str = Field(
+        default="gpt-5",
+        description="OpenAI model name used for per-page field grounding.",
+    )
+    openai_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description="Timeout for each OpenAI request in seconds.",
+    )
+    grounding_provider: str = Field(
+        default="openai",
+        description="Default provider for field grounding runs (openai or anthropic).",
+    )
+    grounding_model: str = Field(
+        default="gpt-5",
+        description="Default model string for field grounding when request does not override it.",
+    )
+    anthropic_api_key: str = Field(
+        default="",
+        description="Anthropic API key used when provider=anthropic.",
+    )
+    anthropic_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description="Timeout for each Anthropic grounding request in seconds.",
+    )

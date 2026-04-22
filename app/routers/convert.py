@@ -14,8 +14,9 @@ from fastapi.responses import JSONResponse, Response
 
 from app.config import Settings
 from app.dependencies import get_settings
-from app.schemas import ConvertResponse
+from app.schemas import ConvertResponse, GroundFieldsRequest, GroundFieldsResponse
 from app.services.conversion import run_convert_pdf_to_images
+from app.services.field_grounding import run_field_grounding_for_job
 from app.services.jobs import job_paths, read_document_manifest, zip_output_folder
 
 LOG = logging.getLogger(__name__)
@@ -185,3 +186,77 @@ async def download_document_manifest(
         raise HTTPException(status_code=404, detail="document_manifest.json not found for this job_id")
 
     return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+
+
+@router.post(
+    "/jobs/{job_id}/ground-fields",
+    response_model=GroundFieldsResponse,
+    summary="Ground form fields from existing converted page images",
+    responses={
+        400: {"description": "Job exists but converted images are missing"},
+        404: {"description": "Job not found"},
+        422: {"description": "No pages succeeded grounding"},
+    },
+)
+async def ground_fields_for_job(
+    job_id: str,
+    request_body: GroundFieldsRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> GroundFieldsResponse:
+    try:
+        root, _, output_dir = job_paths(settings.jobs_dir, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not output_dir.is_dir():
+        raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
+
+    converted_images_dir = output_dir / "converted_images"
+    if not converted_images_dir.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Converted images folder not found: {converted_images_dir}",
+        )
+
+    try:
+        provider = (
+            request_body.provider.strip().lower()
+            if request_body and request_body.provider
+            else settings.grounding_provider.strip().lower()
+        )
+        model = (
+            request_body.model.strip()
+            if request_body and request_body.model
+            else settings.grounding_model.strip()
+        )
+        result = await asyncio.to_thread(
+            run_field_grounding_for_job,
+            job_id=job_id,
+            output_dir=output_dir,
+            provider=provider,
+            model=model,
+            openai_api_key=settings.openai_api_key,
+            openai_timeout_seconds=settings.openai_timeout_seconds,
+            anthropic_api_key=settings.anthropic_api_key,
+            anthropic_timeout_seconds=settings.anthropic_timeout_seconds,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if result["succeeded_count"] == 0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Field grounding failed for all pages.",
+                "job_id": job_id,
+                "page_count": result["page_count"],
+                "failed_count": result["failed_count"],
+                "pages": result["pages"],
+            },
+        )
+
+    return GroundFieldsResponse(**result)

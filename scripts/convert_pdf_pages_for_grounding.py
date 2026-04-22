@@ -47,8 +47,11 @@ Assumptions and fidelity caveats
   ``mapping.status == "unsupported_simple_linear"`` and will handle rotation in
   stamping yourself.
 - **Uniform scale**: Rendering uses ``fitz.Matrix(zoom, zoom)`` with
-  ``zoom = dpi / 72``. For rotation == 0, we verify that horizontal and vertical
-  point-to-pixel ratios match within tolerance; otherwise we refuse to emit.
+  ``zoom = dpi / 72``. For rotation == 0, we verify that ``pdf_w/px_w`` and
+  ``pdf_h/px_h`` (points per pixel) agree within tolerance. MuPDF uses **integer**
+  pixmap width and height, so fractional ``Page.rect`` sizes plus independent
+  rounding can make those ratios differ slightly; the tolerance is set to allow
+  that quantization while still rejecting true anisotropic output.
 - **Rasterization**: Mapping is linear in continuous coordinates; anti-aliasing
   does not preserve sub-pixel ink boundaries.
 - **No post steps**: No crop, pad, deskew, resize, or annotation overlay in the
@@ -74,9 +77,11 @@ import fitz
 LOG = logging.getLogger(__name__)
 
 MANIFEST_VERSION = "1.0"
-# Relative tolerance for uniform scale check (rotation == 0 only).
-_UNIFORM_SCALE_RTOL = 1e-5
-_UNIFORM_SCALE_ATOL = 1e-9
+# Tolerance for ``pdf_w/img_w`` vs ``pdf_h/img_h`` (rotation == 0 only). Integer
+# pixmap dimensions vs float ``page.rect`` can produce ~1e-5 relative drift; see
+# module docstring. True anisotropic scaling would differ by orders of magnitude more.
+_UNIFORM_SCALE_RTOL = 1.5e-4
+_UNIFORM_SCALE_ATOL = 1e-12
 
 
 class PageRecord(TypedDict):
@@ -109,13 +114,16 @@ def _assert_uniform_scale(
     img_w_px: int,
     img_h_px: int,
 ) -> None:
+    """Reject clearly anisotropic renders; allow small drift from integer pixmap size."""
     sx, sy = scales_from_dimensions(pdf_w_pt, pdf_h_pt, img_w_px, img_h_px)
     if not math.isclose(sx, sy, rel_tol=_UNIFORM_SCALE_RTOL, abs_tol=_UNIFORM_SCALE_ATOL):
         raise RuntimeError(
-            "Non-uniform image-to-PDF scale after render; refusing to emit manifest. "
+            "Image-to-PDF scale mismatch after render; refusing to emit manifest. "
             f"pdf=({pdf_w_pt:g}x{pdf_h_pt:g})pt, image=({img_w_px}x{img_h_px})px, "
             f"sx={sx:.12g}, sy={sy:.12g}. "
-            "This should not happen with a diagonal DPI matrix and rotation == 0."
+            "Expected near-equal scales with a diagonal DPI matrix and rotation == 0; "
+            "large gaps suggest anisotropic scaling or a renderer issue, not only "
+            "integer-rounding noise."
         )
 
 
