@@ -63,3 +63,11 @@ class Settings(BaseSettings):
         gt=0,
         description="Timeout for each Anthropic grounding request in seconds.",
     )
+    combined_default_anthropic_model: str = Field(
+        default="claude-opus-4-7",
+        description="Anthropic model used by /convert-and-ground dual-default flow.",
+    )
+    combined_default_openai_model: str = Field(
+        default="gpt-5.5",
+        description="OpenAI model used by /convert-and-ground dual-default flow.",
+    )

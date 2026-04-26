@@ -1,11 +1,9 @@
-"""Per-job filesystem layout and archive helpers."""
+"""Per-job filesystem layout helpers."""
 
 from __future__ import annotations
 
-import io
 import json
 import re
-import zipfile
 from pathlib import Path
 from uuid import UUID
 
@@ -33,19 +31,6 @@ def job_paths(jobs_dir: Path, job_id: str) -> tuple[Path, Path, Path]:
     """
     root = job_root(jobs_dir, job_id)
     return root, root / "input.pdf", root / "output"
-
-
-def zip_output_folder(output_dir: Path) -> bytes:
-    """Zip every file under ``output_dir`` preserving relative paths."""
-    if not output_dir.is_dir():
-        raise FileNotFoundError(f"Output directory not found: {output_dir}")
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for path in sorted(output_dir.rglob("*")):
-            if path.is_file():
-                arc = path.relative_to(output_dir)
-                zf.write(path, arcname=str(arc).replace("\\", "/"))
-    return buf.getvalue()
 
 
 def read_document_manifest(output_dir: Path) -> dict:

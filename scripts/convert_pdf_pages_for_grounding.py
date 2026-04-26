@@ -80,7 +80,9 @@ MANIFEST_VERSION = "1.0"
 # Tolerance for ``pdf_w/img_w`` vs ``pdf_h/img_h`` (rotation == 0 only). Integer
 # pixmap dimensions vs float ``page.rect`` can produce ~1e-5 relative drift; see
 # module docstring. True anisotropic scaling would differ by orders of magnitude more.
-_UNIFORM_SCALE_RTOL = 1.5e-4
+# Some PDFs with fractional page sizes can produce slightly larger axis drift
+# after independent integer rounding of rendered width/height.
+_UNIFORM_SCALE_RTOL = 3e-4
 _UNIFORM_SCALE_ATOL = 1e-12
 
 
