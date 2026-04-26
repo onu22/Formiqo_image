@@ -74,10 +74,32 @@ Response shape:
     "failed_count": 0,
     "output_dir": "field_grounding/anthropic_claude-opus-4-7",
     "manifest_path": "field_grounding/anthropic_claude-opus-4-7/manifest.json",
+    "stamping_sample_path": "field_grounding/anthropic_claude-opus-4-7/stamping.json",
     "pages": []
   }
 }
 ```
+
+After each successful `/convert-and-ground/*` call, a paste-ready stamping sample is auto-generated for that same provider/model run:
+
+- `output/field_grounding/{provider}_{model}/stamping.json`
+
+Sample shape:
+
+```json
+{
+  "values": {
+    "your_full_legal_name.given_name": "your_full_"
+  },
+  "require_all_values": false
+}
+```
+
+The value rule is deterministic: for each `field_id`, value is the first 10 characters of that `field_id`.
+You can paste this JSON directly into both:
+
+- `/api/v1/jobs/{job_id}/stamp-images/{provider}`
+- `/api/v1/jobs/{job_id}/stamp-pdf/{provider}`
 
 Failure behavior:
 
@@ -201,3 +223,61 @@ Notes:
   has no value.
 - Set `"draw_debug_boxes": true` to draw field rectangles for visual debugging.
 - The original files in `converted_images/` are never modified.
+
+## PDF Stamping POC (Provider-Specific Endpoints)
+
+This stamps values onto the original job PDF using grounded image-space bboxes.
+
+Endpoints:
+
+- `POST /api/v1/jobs/<job_id>/stamp-pdf/anthropic`
+- `POST /api/v1/jobs/<job_id>/stamp-pdf/openai`
+
+Provider/model behavior:
+
+- `/stamp-pdf/anthropic` uses `claude-opus-4-7`
+- `/stamp-pdf/openai` uses `gpt-5.5`
+- No `model` override field is accepted.
+- No `style` input field is accepted; PDF style uses internal defaults.
+
+Request body:
+
+```json
+{
+  "values": {
+    "first_name": "Jane",
+    "last_name": "Doe"
+  },
+  "require_all_values": false
+}
+```
+
+Coordinate conversion (image top-left px -> PDF bottom-left pt):
+
+- `scale_x = pdf_width_pt / image_width_px`
+- `scale_y = pdf_height_pt / image_height_px`
+- `pdf_x = x * scale_x`
+- `pdf_y = pdf_height_pt - ((y + h) * scale_y)`
+- `pdf_w = w * scale_x`
+- `pdf_h = h * scale_y`
+
+Outputs are written under:
+
+```text
+output/stamped_pdfs/{provider}_{model}/{stamp_run_id}/
+  stamped.{provider}.pdf
+  manifest.json
+```
+
+Anthropic example:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/jobs/<job_id>/stamp-pdf/anthropic" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "values": {
+      "first_name": "Jane",
+      "last_name": "Doe"
+    }
+  }'
+```

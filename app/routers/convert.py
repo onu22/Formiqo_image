@@ -18,10 +18,13 @@ from app.schemas import (
     GroundFieldsResponse,
     StampImagesProviderRequest,
     StampImagesResponse,
+    StampPdfProviderRequest,
+    StampPdfResponse,
 )
 from app.services.conversion import run_convert_pdf_to_images
 from app.services.field_grounding import run_field_grounding_for_job
 from app.services.image_stamping import StampImageStyle, run_image_stamping_for_job
+from app.services.pdf_stamping import StampPdfStyle, run_pdf_stamping_for_job
 from app.services.jobs import job_paths, read_document_manifest
 
 LOG = logging.getLogger(__name__)
@@ -337,3 +340,110 @@ async def _stamp_images_for_provider(
         )
 
     return StampImagesResponse(**result)
+
+
+@router.post(
+    "/jobs/{job_id}/stamp-pdf/anthropic",
+    response_model=StampPdfResponse,
+    summary="Stamp values onto original PDF using Anthropic grounding JSON",
+    responses={
+        400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
+        404: {"description": "Job not found"},
+        422: {"description": "No pages succeeded PDF stamping"},
+    },
+)
+async def stamp_pdf_anthropic_for_job(
+    job_id: str,
+    request_body: StampPdfProviderRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> StampPdfResponse:
+    return await _stamp_pdf_for_provider(
+        job_id=job_id,
+        provider="anthropic",
+        default_model=settings.combined_default_anthropic_model,
+        request_body=request_body,
+        settings=settings,
+    )
+
+
+@router.post(
+    "/jobs/{job_id}/stamp-pdf/openai",
+    response_model=StampPdfResponse,
+    summary="Stamp values onto original PDF using OpenAI grounding JSON",
+    responses={
+        400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
+        404: {"description": "Job not found"},
+        422: {"description": "No pages succeeded PDF stamping"},
+    },
+)
+async def stamp_pdf_openai_for_job(
+    job_id: str,
+    request_body: StampPdfProviderRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> StampPdfResponse:
+    return await _stamp_pdf_for_provider(
+        job_id=job_id,
+        provider="openai",
+        default_model=settings.combined_default_openai_model,
+        request_body=request_body,
+        settings=settings,
+    )
+
+
+async def _stamp_pdf_for_provider(
+    *,
+    job_id: str,
+    provider: str,
+    default_model: str,
+    request_body: StampPdfProviderRequest | None,
+    settings: Settings,
+) -> StampPdfResponse:
+    try:
+        root, input_pdf, output_dir = job_paths(settings.jobs_dir, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not output_dir.is_dir():
+        raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
+    if not input_pdf.is_file():
+        raise HTTPException(status_code=400, detail=f"Input PDF not found for job: {input_pdf}")
+
+    model = default_model.strip()
+    values = request_body.values if request_body else {}
+    style = StampPdfStyle()
+    require_all_values = bool(request_body.require_all_values) if request_body else False
+
+    try:
+        result = await asyncio.to_thread(
+            run_pdf_stamping_for_job,
+            job_id=job_id,
+            input_pdf=input_pdf,
+            output_dir=output_dir,
+            provider=provider,
+            model=model,
+            values=values,
+            style=style,
+            require_all_values=require_all_values,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if result["succeeded_count"] == 0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "PDF stamping failed for all pages.",
+                "job_id": job_id,
+                "provider": result["provider"],
+                "model": result["model"],
+                "page_count": result["page_count"],
+                "failed_count": result["failed_count"],
+                "pages": result["pages"],
+            },
+        )
+
+    return StampPdfResponse(**result)

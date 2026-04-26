@@ -54,6 +54,8 @@ def test_openapi_docs_provider_split(api_client: TestClient) -> None:
     assert "/api/v1/convert-and-ground/openai" in paths
     assert "/api/v1/jobs/{job_id}/stamp-images/anthropic" in paths
     assert "/api/v1/jobs/{job_id}/stamp-images/openai" in paths
+    assert "/api/v1/jobs/{job_id}/stamp-pdf/anthropic" in paths
+    assert "/api/v1/jobs/{job_id}/stamp-pdf/openai" in paths
     assert "/api/v1/convert" not in paths
     assert "/api/v1/jobs/{job_id}/ground-fields" not in paths
     assert "/api/v1/convert-and-ground" not in paths
@@ -87,6 +89,28 @@ def test_openapi_docs_provider_split(api_client: TestClient) -> None:
         openai_props = stamp_openai_schema.get("properties", {})
     assert "model" not in anthropic_props
     assert "model" not in openai_props
+    stamp_pdf_anthropic_schema = paths["/api/v1/jobs/{job_id}/stamp-pdf/anthropic"]["post"]["requestBody"]["content"][
+        "application/json"
+    ]["schema"]
+    stamp_pdf_openai_schema = paths["/api/v1/jobs/{job_id}/stamp-pdf/openai"]["post"]["requestBody"]["content"][
+        "application/json"
+    ]["schema"]
+    stamp_pdf_anthropic_ref = stamp_pdf_anthropic_schema.get("$ref")
+    stamp_pdf_openai_ref = stamp_pdf_openai_schema.get("$ref")
+    if stamp_pdf_anthropic_ref:
+        stamp_pdf_anthropic_name = stamp_pdf_anthropic_ref.rsplit("/", 1)[-1]
+        stamp_pdf_anthropic_props = spec["components"]["schemas"][stamp_pdf_anthropic_name]["properties"]
+    else:
+        stamp_pdf_anthropic_props = stamp_pdf_anthropic_schema.get("properties", {})
+    if stamp_pdf_openai_ref:
+        stamp_pdf_openai_name = stamp_pdf_openai_ref.rsplit("/", 1)[-1]
+        stamp_pdf_openai_props = spec["components"]["schemas"][stamp_pdf_openai_name]["properties"]
+    else:
+        stamp_pdf_openai_props = stamp_pdf_openai_schema.get("properties", {})
+    assert "model" not in stamp_pdf_anthropic_props
+    assert "model" not in stamp_pdf_openai_props
+    assert "style" not in stamp_pdf_anthropic_props
+    assert "style" not in stamp_pdf_openai_props
 
 
 def _create_job_via_provider_endpoint(api_client: TestClient, provider: str) -> str:
@@ -130,6 +154,7 @@ def test_convert_and_ground_anthropic_happy_path(api_client: TestClient, monkeyp
             "failed_count": 0,
             "output_dir": run_dir,
             "manifest_path": f"{run_dir}/manifest.json",
+            "stamping_sample_path": f"{run_dir}/stamping.json",
             "pages": [],
         }
 
@@ -142,6 +167,7 @@ def test_convert_and_ground_anthropic_happy_path(api_client: TestClient, monkeyp
     assert calls == [("anthropic", "claude-opus-4-7")]
     assert body["grounding"]["provider"] == "anthropic"
     assert body["grounding"]["model"] == "claude-opus-4-7"
+    assert body["grounding"]["stamping_sample_path"] == "field_grounding/anthropic_claude-opus-4-7/stamping.json"
 
 
 def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,6 +187,7 @@ def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, mo
             "failed_count": 0,
             "output_dir": run_dir,
             "manifest_path": f"{run_dir}/manifest.json",
+            "stamping_sample_path": f"{run_dir}/stamping.json",
             "pages": [],
         }
 
@@ -171,6 +198,7 @@ def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, mo
     assert r.status_code == 200, r.text
     assert calls == [("openai", "gpt-5.5")]
     assert r.json()["grounding"]["model"] == "gpt-5.5"
+    assert r.json()["grounding"]["stamping_sample_path"] == "field_grounding/openai_gpt-5.5/stamping.json"
 
 
 def test_convert_and_ground_non_pdf_rejected(api_client: TestClient) -> None:
@@ -193,6 +221,7 @@ def test_convert_and_ground_all_failed_returns_422(api_client: TestClient, monke
             "failed_count": 1,
             "output_dir": run_dir,
             "manifest_path": f"{run_dir}/manifest.json",
+            "stamping_sample_path": f"{run_dir}/stamping.json",
             "pages": [{"page_index": 0, "status": "failed", "error": "invalid json", "image_path": "x"}],
         }
 
@@ -370,4 +399,86 @@ def test_stamp_images_openai_all_failed_returns_422(api_client: TestClient) -> N
     assert r.status_code == 422
     detail = r.json()["detail"]
     assert detail["message"] == "Image stamping failed for all pages."
+    assert detail["failed_count"] == 1
+
+
+def test_stamp_pdf_anthropic_job_not_found(api_client: TestClient) -> None:
+    r = api_client.post("/api/v1/jobs/11111111-1111-4111-8111-111111111111/stamp-pdf/anthropic")
+    assert r.status_code == 404
+
+
+def test_stamp_pdf_openai_missing_grounding_run(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    r = api_client.post(f"/api/v1/jobs/{job_id}/stamp-pdf/openai", json={"values": {"first_name": "Jane"}})
+    assert r.status_code == 400
+    assert "Field grounding run not found" in r.json()["detail"]
+
+
+def test_stamp_pdf_rejects_style_input(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/stamp-pdf/openai",
+        json={
+            "values": {"first_name": "Jane"},
+            "style": {"font_size_pt": 20},
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_stamp_pdf_openai_happy_path(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    settings = app.dependency_overrides[get_settings]()
+    output_dir = settings.jobs_dir / job_id / "output"
+    width, height = _converted_image_dimensions(output_dir)
+    _write_field_grounding_file(output_dir, provider="openai", model="gpt-5.5", width=width, height=height)
+
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/stamp-pdf/openai",
+        json={"values": {"first_name": "Jane", "last_name": "Doe"}},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["provider"] == "openai"
+    assert body["model"] == "gpt-5.5"
+    assert body["succeeded_count"] == 1
+    assert body["failed_count"] == 0
+    assert body["output_pdf"].endswith(".openai.pdf")
+    assert (output_dir / body["output_pdf"]).is_file()
+    assert (output_dir / body["manifest_path"]).is_file()
+
+
+def test_stamp_pdf_anthropic_happy_path(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    settings = app.dependency_overrides[get_settings]()
+    output_dir = settings.jobs_dir / job_id / "output"
+    width, height = _converted_image_dimensions(output_dir)
+    _write_field_grounding_file(output_dir, provider="anthropic", model="claude-opus-4-7", width=width, height=height)
+
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/stamp-pdf/anthropic",
+        json={"values": {"first_name": "Jane"}},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["provider"] == "anthropic"
+    assert body["model"] == "claude-opus-4-7"
+    assert body["run_dir"].startswith("stamped_pdfs/anthropic_claude-opus-4-7/")
+    assert body["pages"][0]["stamped_count"] == 1
+    assert body["pages"][0]["missing_value_count"] == 1
+
+
+def test_stamp_pdf_openai_all_failed_returns_422(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    settings = app.dependency_overrides[get_settings]()
+    output_dir = settings.jobs_dir / job_id / "output"
+    _write_field_grounding_file(output_dir, provider="openai", model="gpt-5.5", width=9999, height=9999)
+
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/stamp-pdf/openai",
+        json={"values": {"first_name": "Jane", "last_name": "Doe"}},
+    )
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["message"] == "PDF stamping failed for all pages."
     assert detail["failed_count"] == 1

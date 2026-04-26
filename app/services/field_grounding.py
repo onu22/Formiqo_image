@@ -280,6 +280,37 @@ def _provider_model_dir_name(provider: str, model: str) -> str:
     return f"{safe_provider}_{safe_model}"
 
 
+def _load_json(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object: {path}")
+    return data
+
+
+def _build_stamping_sample(field_dir: Path) -> tuple[str, dict[str, Any]]:
+    values: dict[str, str] = {}
+    for page_path in sorted(field_dir.glob("page_*.fields.json")):
+        payload = _load_json(page_path)
+        fields = payload.get("fields")
+        if not isinstance(fields, list):
+            continue
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            field_id = field.get("field_id")
+            if not isinstance(field_id, str) or not field_id:
+                continue
+            if field_id not in values:
+                values[field_id] = field_id[:10]
+    stamping_payload: dict[str, Any] = {
+        "values": values,
+        "require_all_values": False,
+    }
+    stamping_name = "stamping.json"
+    (field_dir / stamping_name).write_text(json.dumps(stamping_payload, indent=2) + "\n", encoding="utf-8")
+    return stamping_name, stamping_payload
+
+
 def _create_provider_client(
     *,
     provider: str,
@@ -407,6 +438,9 @@ def run_field_grounding_for_job(
 
     succeeded_count = sum(1 for p in page_results if p["status"] == "succeeded")
     failed_count = len(page_results) - succeeded_count
+    stamping_name, _ = _build_stamping_sample(field_dir)
+    stamping_rel = f"field_grounding/{run_dir_name}/{stamping_name}"
+    output_files.append(stamping_rel)
 
     manifest_rel = f"field_grounding/{run_dir_name}/manifest.json"
     manifest = {
@@ -421,6 +455,7 @@ def run_field_grounding_for_job(
         "files": output_files,
         "succeeded_count": succeeded_count,
         "failed_count": failed_count,
+        "stamping_sample_path": stamping_rel,
     }
     (field_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
@@ -435,5 +470,6 @@ def run_field_grounding_for_job(
         "failed_count": failed_count,
         "output_dir": f"field_grounding/{run_dir_name}",
         "manifest_path": manifest_rel,
+        "stamping_sample_path": stamping_rel,
         "pages": page_results,
     }

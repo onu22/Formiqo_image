@@ -43,6 +43,7 @@ class GroundFieldsResponse(BaseModel):
     failed_count: int
     output_dir: str
     manifest_path: str
+    stamping_sample_path: str | None = None
     pages: list[GroundFieldsPageResult]
 
 
@@ -91,3 +92,46 @@ class StampImagesResponse(BaseModel):
     succeeded_count: int
     failed_count: int
     pages: list[StampImagesPageResult]
+
+
+class StampPdfStyle(BaseModel):
+    font_size_pt: float = Field(default=11.0, gt=0, le=200)
+    font_color: str = Field(default="#111111", pattern=r"^#[0-9a-fA-F]{6}$")
+    padding_pt: float = Field(default=1.0, ge=0, le=50)
+    draw_debug_boxes: bool = False
+    debug_box_color: str = Field(default="#ff0000", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class StampPdfProviderRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    values: dict[str, str] = Field(default_factory=dict)
+    require_all_values: bool = False
+
+
+class StampPdfPageResult(BaseModel):
+    page_index: int
+    status: str
+    grounding_file: str | None = None
+    page_manifest: str | None = None
+    source_pdf: str | None = None
+    output_pdf: str | None = None
+    field_count: int | None = None
+    stamped_count: int | None = None
+    missing_value_count: int | None = None
+    unsupported_field_count: int | None = None
+    warnings: list[str] | None = None
+    error: str | None = None
+
+
+class StampPdfResponse(BaseModel):
+    job_id: str
+    provider: str
+    model: str
+    stamp_run_id: str
+    run_dir: str
+    manifest_path: str
+    output_pdf: str
+    page_count: int
+    succeeded_count: int
+    failed_count: int
+    pages: list[StampPdfPageResult]
