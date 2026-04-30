@@ -28,6 +28,7 @@ class GroundFieldsPageResult(BaseModel):
     page_index: int
     image_path: str
     status: str
+    resolution: str | None = None
     output_file: str | None = None
     error: str | None = None
 
@@ -45,6 +46,13 @@ class GroundFieldsResponse(BaseModel):
     manifest_path: str
     stamping_sample_path: str | None = None
     pages: list[GroundFieldsPageResult]
+
+
+class GroundFieldsRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    page_index: int | None = Field(default=None, ge=0)
 
 
 class ConvertAndGroundResponse(BaseModel):

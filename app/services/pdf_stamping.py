@@ -12,7 +12,6 @@ from typing import Any
 import fitz
 
 _GROUNDING_PAGE_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
-_MODEL_DIR_SAFE_RE = re.compile(r"[^a-z0-9._-]+")
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -23,12 +22,6 @@ class StampPdfStyle:
     padding_pt: float = 1.0
     draw_debug_boxes: bool = False
     debug_box_color: str = "#ff0000"
-
-
-def _provider_model_dir_name(provider: str, model: str) -> str:
-    safe_provider = _MODEL_DIR_SAFE_RE.sub("-", provider.lower()).strip("-")
-    safe_model = _MODEL_DIR_SAFE_RE.sub("-", model.lower()).strip("-")
-    return f"{safe_provider}_{safe_model}"
 
 
 def _validate_hex_color(value: str, *, field_name: str) -> str:
@@ -63,6 +56,18 @@ def _discover_grounding_pages(grounding_dir: Path) -> list[tuple[int, Path]]:
     if not pages:
         raise FileNotFoundError(f"No grounded page files found under: {grounding_dir}")
     return pages
+
+
+def _assert_grounding_run_matches(grounding_dir: Path, *, provider: str, model: str) -> None:
+    manifest_path = grounding_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return
+    manifest = _load_json(manifest_path)
+    if manifest.get("provider") != provider or manifest.get("model") != model:
+        raise FileNotFoundError(
+            f"Field grounding run not found for provider={provider}, model={model} "
+            f"(found provider={manifest.get('provider')}, model={manifest.get('model')})."
+        )
 
 
 def _read_page_manifest(output_dir: Path, page_index: int) -> tuple[Path, dict[str, Any]]:
@@ -206,16 +211,16 @@ def run_pdf_stamping_for_job(
     if not converted_pages_dir.is_dir():
         raise FileNotFoundError("Conversion page manifests not found: converted_images/pages")
 
-    run_dir_name = _provider_model_dir_name(provider_norm, model)
-    grounding_dir = output_dir / "field_grounding" / run_dir_name
+    grounding_dir = output_dir / "field_grounding"
     if not grounding_dir.is_dir():
         raise FileNotFoundError(
             f"Field grounding run not found for provider={provider_norm}, model={model} "
-            f"(expected directory: field_grounding/{run_dir_name})."
+            f"(expected directory: field_grounding)."
         )
+    _assert_grounding_run_matches(grounding_dir, provider=provider_norm, model=model)
 
     stamp_run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    run_dir_rel = f"stamped_pdfs/{run_dir_name}/{stamp_run_id}"
+    run_dir_rel = f"stamped_pdfs/{stamp_run_id}"
     run_dir = output_dir / run_dir_rel
     output_pdf_rel = f"{run_dir_rel}/stamped.{provider_norm}.pdf"
     output_pdf = output_dir / output_pdf_rel

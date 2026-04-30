@@ -50,14 +50,14 @@ def test_openapi_docs_provider_split(api_client: TestClient) -> None:
     assert r.status_code == 200
     spec = r.json()
     paths = spec["paths"]
+    assert "/api/v1/convert" in paths
+    assert "/api/v1/jobs/{job_id}/ground-fields" in paths
     assert "/api/v1/convert-and-ground/anthropic" in paths
     assert "/api/v1/convert-and-ground/openai" in paths
     assert "/api/v1/jobs/{job_id}/stamp-images/anthropic" in paths
     assert "/api/v1/jobs/{job_id}/stamp-images/openai" in paths
     assert "/api/v1/jobs/{job_id}/stamp-pdf/anthropic" in paths
     assert "/api/v1/jobs/{job_id}/stamp-pdf/openai" in paths
-    assert "/api/v1/convert" not in paths
-    assert "/api/v1/jobs/{job_id}/ground-fields" not in paths
     assert "/api/v1/convert-and-ground" not in paths
     anthropic_schema_ref = paths["/api/v1/convert-and-ground/anthropic"]["post"]["requestBody"]["content"][
         "multipart/form-data"
@@ -121,7 +121,7 @@ def _create_job_via_provider_endpoint(api_client: TestClient, provider: str) -> 
     return r.json()["job_id"]
 
 
-def _create_converted_job_only() -> str:
+def _create_converted_job_only(provider: str = "openai", model: str = "gpt-5.5") -> str:
     settings = app.dependency_overrides[get_settings]()
     job_id = str(uuid.uuid4())
     root, input_pdf, output_dir = job_paths(settings.jobs_dir, job_id)
@@ -142,7 +142,7 @@ def test_convert_and_ground_anthropic_happy_path(api_client: TestClient, monkeyp
 
     def fake_ground(**kwargs):
         calls.append((kwargs["provider"], kwargs["model"]))
-        run_dir = f"field_grounding/{kwargs['provider']}_{kwargs['model']}"
+        run_dir = "field_grounding"
         return {
             "job_id": kwargs["job_id"],
             "provider": kwargs["provider"],
@@ -167,7 +167,10 @@ def test_convert_and_ground_anthropic_happy_path(api_client: TestClient, monkeyp
     assert calls == [("anthropic", "claude-opus-4-7")]
     assert body["grounding"]["provider"] == "anthropic"
     assert body["grounding"]["model"] == "claude-opus-4-7"
-    assert body["grounding"]["stamping_sample_path"] == "field_grounding/anthropic_claude-opus-4-7/stamping.json"
+    assert body["grounding"]["stamping_sample_path"] == "field_grounding/stamping.json"
+    assert body["convert"]["document_manifest"]["provider"] == "anthropic"
+    assert body["convert"]["document_manifest"]["model"] == "claude-opus-4-7"
+    assert body["convert"]["document_manifest"]["provider_model"] == "anthropic_claude-opus-4-7"
 
 
 def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,7 +178,7 @@ def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, mo
 
     def fake_ground(**kwargs):
         calls.append((kwargs["provider"], kwargs["model"]))
-        run_dir = f"field_grounding/{kwargs['provider']}_{kwargs['model']}"
+        run_dir = "field_grounding"
         return {
             "job_id": kwargs["job_id"],
             "provider": kwargs["provider"],
@@ -198,7 +201,8 @@ def test_convert_and_ground_openai_uses_default_model(api_client: TestClient, mo
     assert r.status_code == 200, r.text
     assert calls == [("openai", "gpt-5.5")]
     assert r.json()["grounding"]["model"] == "gpt-5.5"
-    assert r.json()["grounding"]["stamping_sample_path"] == "field_grounding/openai_gpt-5.5/stamping.json"
+    assert r.json()["grounding"]["stamping_sample_path"] == "field_grounding/stamping.json"
+    assert r.json()["convert"]["document_manifest"]["provider_model"] == "openai_gpt-5.5"
 
 
 def test_convert_and_ground_non_pdf_rejected(api_client: TestClient) -> None:
@@ -207,9 +211,97 @@ def test_convert_and_ground_non_pdf_rejected(api_client: TestClient) -> None:
     assert r.status_code == 400
 
 
+def test_convert_only_happy_path(api_client: TestClient) -> None:
+    pdf = _minimal_pdf_bytes()
+    files = {"file": ("sample.pdf", pdf, "application/pdf")}
+    r = api_client.post("/api/v1/convert", files=files, data={"dpi": "72"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["page_count"] == 1
+    assert body["source_filename"] == "sample.pdf"
+    assert "document_manifest" in body
+
+
+def test_ground_fields_happy_path(api_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    job_id = _create_converted_job_only()
+
+    def fake_ground(**kwargs):
+        return {
+            "job_id": kwargs["job_id"],
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "run_id": "run_g1",
+            "run_dir": "field_grounding",
+            "page_count": 1,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "output_dir": "field_grounding",
+            "manifest_path": "field_grounding/manifest.json",
+            "stamping_sample_path": "field_grounding/stamping.json",
+            "pages": [],
+        }
+
+    monkeypatch.setattr("app.routers.convert.run_field_grounding_for_job", fake_ground)
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/ground-fields",
+        json={"provider": "openai", "model": "gpt-5.5"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["provider"] == "openai"
+    assert body["model"] == "gpt-5.5"
+
+
+def test_ground_fields_passes_page_index(api_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    job_id = _create_converted_job_only()
+    seen: dict[str, object] = {}
+
+    def fake_ground(**kwargs):
+        seen.update(kwargs)
+        return {
+            "job_id": kwargs["job_id"],
+            "provider": kwargs["provider"],
+            "model": kwargs["model"],
+            "run_id": "run_g2",
+            "run_dir": "field_grounding",
+            "page_count": 1,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "output_dir": "field_grounding",
+            "manifest_path": "field_grounding/manifest.json",
+            "stamping_sample_path": "field_grounding/stamping.json",
+            "pages": [],
+        }
+
+    monkeypatch.setattr("app.routers.convert.run_field_grounding_for_job", fake_ground)
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/ground-fields",
+        json={"provider": "openai", "model": "gpt-5.5", "page_index": 0},
+    )
+    assert r.status_code == 200, r.text
+    assert seen["page_index"] == 0
+
+
+def test_ground_fields_missing_job_returns_404(api_client: TestClient) -> None:
+    r = api_client.post(
+        "/api/v1/jobs/11111111-1111-4111-8111-111111111111/ground-fields",
+        json={"provider": "openai", "model": "gpt-5.5"},
+    )
+    assert r.status_code == 404
+
+
+def test_ground_fields_rejects_negative_page_index(api_client: TestClient) -> None:
+    job_id = _create_converted_job_only()
+    r = api_client.post(
+        f"/api/v1/jobs/{job_id}/ground-fields",
+        json={"provider": "openai", "model": "gpt-5.5", "page_index": -1},
+    )
+    assert r.status_code == 422
+
+
 def test_convert_and_ground_all_failed_returns_422(api_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_failed(**kwargs):
-        run_dir = f"field_grounding/{kwargs['provider']}_{kwargs['model']}"
+        run_dir = "field_grounding"
         return {
             "job_id": kwargs["job_id"],
             "provider": kwargs["provider"],
@@ -248,7 +340,7 @@ def _write_field_grounding_file(
     width: int,
     height: int,
 ) -> None:
-    run_dir = output_dir / "field_grounding" / f"{provider}_{model}"
+    run_dir = output_dir / "field_grounding"
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "page_0001.fields.json").write_text(
         json.dumps(
@@ -285,11 +377,11 @@ def _write_field_grounding_file(
                 "provider": provider,
                 "model": model,
                 "run_id": "run_test",
-                "run_dir": f"field_grounding/{provider}_{model}",
+                "run_dir": "field_grounding",
                 "created_at": "2026-01-01T00:00:00Z",
                 "page_count": 1,
-                "output_dir": f"field_grounding/{provider}_{model}",
-                "files": [f"field_grounding/{provider}_{model}/page_0001.fields.json"],
+                "output_dir": "field_grounding",
+                "files": ["field_grounding/page_0001.fields.json"],
                 "succeeded_count": 1,
                 "failed_count": 0,
             }
@@ -305,14 +397,14 @@ def test_stamp_images_anthropic_job_not_found(api_client: TestClient) -> None:
 
 
 def test_stamp_images_openai_missing_grounding_run(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     r = api_client.post(f"/api/v1/jobs/{job_id}/stamp-images/openai", json={"values": {"first_name": "Jane"}})
     assert r.status_code == 400
     assert "Field grounding run not found" in r.json()["detail"]
 
 
 def test_stamp_images_openai_happy_path(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     width, height = _converted_image_dimensions(output_dir)
@@ -336,7 +428,7 @@ def test_stamp_images_openai_happy_path(api_client: TestClient) -> None:
 
 
 def test_stamp_images_anthropic_happy_path(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("anthropic", "claude-opus-4-7")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     width, height = _converted_image_dimensions(output_dir)
@@ -359,14 +451,14 @@ def test_stamp_images_anthropic_happy_path(api_client: TestClient) -> None:
     body = r.json()
     assert body["provider"] == "anthropic"
     assert body["model"] == "claude-opus-4-7"
-    assert body["run_dir"].startswith("stamped_images/anthropic_claude-opus-4-7/")
+    assert body["run_dir"].startswith("stamped_images/")
     assert body["pages"][0]["stamped_count"] == 1
     assert body["pages"][0]["missing_value_count"] == 1
     assert body["pages"][0]["output_image"].endswith(".anthropic.stamped.png")
 
 
 def test_stamp_images_anthropic_uses_default_model(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("anthropic", "claude-opus-4-7")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     width, height = _converted_image_dimensions(output_dir)
@@ -387,7 +479,7 @@ def test_stamp_images_anthropic_uses_default_model(api_client: TestClient) -> No
 
 
 def test_stamp_images_openai_all_failed_returns_422(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     _write_field_grounding_file(output_dir, provider="openai", model="gpt-5.5", width=9999, height=9999)
@@ -408,14 +500,14 @@ def test_stamp_pdf_anthropic_job_not_found(api_client: TestClient) -> None:
 
 
 def test_stamp_pdf_openai_missing_grounding_run(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     r = api_client.post(f"/api/v1/jobs/{job_id}/stamp-pdf/openai", json={"values": {"first_name": "Jane"}})
     assert r.status_code == 400
     assert "Field grounding run not found" in r.json()["detail"]
 
 
 def test_stamp_pdf_rejects_style_input(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     r = api_client.post(
         f"/api/v1/jobs/{job_id}/stamp-pdf/openai",
         json={
@@ -427,7 +519,7 @@ def test_stamp_pdf_rejects_style_input(api_client: TestClient) -> None:
 
 
 def test_stamp_pdf_openai_happy_path(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     width, height = _converted_image_dimensions(output_dir)
@@ -449,7 +541,7 @@ def test_stamp_pdf_openai_happy_path(api_client: TestClient) -> None:
 
 
 def test_stamp_pdf_anthropic_happy_path(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("anthropic", "claude-opus-4-7")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     width, height = _converted_image_dimensions(output_dir)
@@ -463,13 +555,13 @@ def test_stamp_pdf_anthropic_happy_path(api_client: TestClient) -> None:
     body = r.json()
     assert body["provider"] == "anthropic"
     assert body["model"] == "claude-opus-4-7"
-    assert body["run_dir"].startswith("stamped_pdfs/anthropic_claude-opus-4-7/")
+    assert body["run_dir"].startswith("stamped_pdfs/")
     assert body["pages"][0]["stamped_count"] == 1
     assert body["pages"][0]["missing_value_count"] == 1
 
 
 def test_stamp_pdf_openai_all_failed_returns_422(api_client: TestClient) -> None:
-    job_id = _create_converted_job_only()
+    job_id = _create_converted_job_only("openai", "gpt-5.5")
     settings = app.dependency_overrides[get_settings]()
     output_dir = settings.jobs_dir / job_id / "output"
     _write_field_grounding_file(output_dir, provider="openai", model="gpt-5.5", width=9999, height=9999)

@@ -46,6 +46,11 @@ class Settings(BaseSettings):
         gt=0,
         description="Timeout for each OpenAI request in seconds.",
     )
+    grounding_openai_max_output_tokens: int = Field(
+        default=9600,
+        ge=256,
+        description="Max output tokens for OpenAI grounding and JSON repair calls.",
+    )
     grounding_provider: str = Field(
         default="openai",
         description="Default provider for field grounding runs (openai or anthropic).",
@@ -62,6 +67,11 @@ class Settings(BaseSettings):
         default=60.0,
         gt=0,
         description="Timeout for each Anthropic grounding request in seconds.",
+    )
+    grounding_anthropic_max_tokens: int = Field(
+        default=4800,
+        ge=256,
+        description="Max output tokens for Anthropic grounding and JSON repair calls.",
     )
     combined_default_anthropic_model: str = Field(
         default="claude-opus-4-7",

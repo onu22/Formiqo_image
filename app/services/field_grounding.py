@@ -14,8 +14,8 @@ from anthropic import Anthropic
 from openai import OpenAI
 
 _PAGE_IMAGE_RE = re.compile(r"^page_(\d{4})\.png$")
-_MODEL_DIR_SAFE_RE = re.compile(r"[^a-z0-9._-]+")
 _SUPPORTED_PROVIDERS = {"openai", "anthropic"}
+_MAX_PARSE_RETRIES = 1
 
 _PROMPT_TEMPLATE = """You are a document field-grounding assistant.
 
@@ -94,6 +94,50 @@ Before finalizing your answer, verify:
 Now analyze the provided form image and return the JSON only.
 """
 
+_REPAIR_PROMPT_TEMPLATE = """You are a JSON repair assistant.
+
+You receive malformed text that was intended to be a single JSON object for document field grounding.
+Return ONLY a valid JSON object that matches this exact schema and constraints:
+
+{
+  "page_index": <int exactly {{PAGE_INDEX}}>,
+  "width": <int exactly {{IMAGE_WIDTH}}>,
+  "height": <int exactly {{IMAGE_HEIGHT}}>,
+  "unit": "px",
+  "origin": "top-left",
+  "fields": [
+    {
+      "field_id": "<non-empty string>",
+      "type": "<non-empty string>",
+      "bbox": { "x": <int>, "y": <int>, "w": <int>, "h": <int> }
+    }
+  ]
+}
+
+Rules:
+1. Return JSON only. No markdown. No prose.
+2. Root keys must be exactly: page_index, width, height, unit, origin, fields.
+3. page_index must be {{PAGE_INDEX}}.
+4. width must be {{IMAGE_WIDTH}} and height must be {{IMAGE_HEIGHT}}.
+5. unit must be "px" and origin must be "top-left".
+6. Every field must contain exactly: field_id, type, bbox.
+7. Every bbox must contain exactly: x, y, w, h.
+8. bbox values must be integers.
+9. Do not add any extra keys anywhere.
+10. Preserve as much valid field content as possible from the malformed input.
+
+Malformed input:
+{{BROKEN_JSON}}
+"""
+
+
+class GroundingJsonParseError(ValueError):
+    """Raised when model text cannot be parsed as valid JSON."""
+
+    def __init__(self, message: str, raw_text: str):
+        super().__init__(message)
+        self.raw_text = raw_text
+
 
 def _read_png_dimensions(image_path: Path) -> tuple[int, int]:
     """Return authoritative PNG dimensions from IHDR."""
@@ -126,6 +170,15 @@ def _discover_page_images(output_dir: Path) -> list[tuple[int, Path]]:
 
 def _prompt_for_dimensions(width: int, height: int) -> str:
     return _PROMPT_TEMPLATE.replace("{{IMAGE_WIDTH}}", str(width)).replace("{{IMAGE_HEIGHT}}", str(height))
+
+
+def _repair_prompt_for_dimensions(*, page_index: int, width: int, height: int, broken_json: str) -> str:
+    return (
+        _REPAIR_PROMPT_TEMPLATE.replace("{{PAGE_INDEX}}", str(page_index))
+        .replace("{{IMAGE_WIDTH}}", str(width))
+        .replace("{{IMAGE_HEIGHT}}", str(height))
+        .replace("{{BROKEN_JSON}}", broken_json)
+    )
 
 
 def _extract_json_text(response: Any) -> str:
@@ -210,6 +263,7 @@ def _call_openai_for_page(
     *,
     model: str,
     timeout_seconds: float,
+    max_output_tokens: int,
     page_index: int,
     width: int,
     height: int,
@@ -220,6 +274,7 @@ def _call_openai_for_page(
     response = client.responses.create(
         model=model,
         timeout=timeout_seconds,
+        max_output_tokens=max_output_tokens,
         input=[
             {
                 "role": "user",
@@ -232,7 +287,10 @@ def _call_openai_for_page(
         text={"format": {"type": "json_object"}},
     )
     raw_json = _extract_json_text(response)
-    parsed = json.loads(raw_json)
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise GroundingJsonParseError(f"Invalid JSON from OpenAI model response: {exc}", raw_json) from exc
     return _validate_field_grounding_json(parsed, page_index=page_index, width=width, height=height)
 
 
@@ -241,6 +299,7 @@ def _call_anthropic_for_page(
     *,
     model: str,
     timeout_seconds: float,
+    max_tokens: int,
     page_index: int,
     width: int,
     height: int,
@@ -250,7 +309,7 @@ def _call_anthropic_for_page(
     image_b64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
     response = client.messages.create(
         model=model,
-        max_tokens=4000,
+        max_tokens=max_tokens,
         timeout=timeout_seconds,
         messages=[
             {
@@ -270,14 +329,11 @@ def _call_anthropic_for_page(
         ],
     )
     raw_json = _extract_json_text_anthropic(response)
-    parsed = json.loads(raw_json)
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise GroundingJsonParseError(f"Invalid JSON from Anthropic model response: {exc}", raw_json) from exc
     return _validate_field_grounding_json(parsed, page_index=page_index, width=width, height=height)
-
-
-def _provider_model_dir_name(provider: str, model: str) -> str:
-    safe_provider = _MODEL_DIR_SAFE_RE.sub("-", provider.lower()).strip("-")
-    safe_model = _MODEL_DIR_SAFE_RE.sub("-", model.lower()).strip("-")
-    return f"{safe_provider}_{safe_model}"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -328,12 +384,77 @@ def _create_provider_client(
     raise ValueError(f"Unsupported provider: {provider}")
 
 
+def _call_openai_repair_json(
+    client: OpenAI,
+    *,
+    model: str,
+    timeout_seconds: float,
+    max_output_tokens: int,
+    page_index: int,
+    width: int,
+    height: int,
+    broken_json: str,
+) -> dict[str, Any]:
+    prompt = _repair_prompt_for_dimensions(
+        page_index=page_index,
+        width=width,
+        height=height,
+        broken_json=broken_json,
+    )
+    response = client.responses.create(
+        model=model,
+        timeout=timeout_seconds,
+        max_output_tokens=max_output_tokens,
+        input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        text={"format": {"type": "json_object"}},
+    )
+    raw_json = _extract_json_text(response)
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise GroundingJsonParseError(f"Invalid JSON from OpenAI repair response: {exc}", raw_json) from exc
+    return _validate_field_grounding_json(parsed, page_index=page_index, width=width, height=height)
+
+
+def _call_anthropic_repair_json(
+    client: Anthropic,
+    *,
+    model: str,
+    timeout_seconds: float,
+    max_tokens: int,
+    page_index: int,
+    width: int,
+    height: int,
+    broken_json: str,
+) -> dict[str, Any]:
+    prompt = _repair_prompt_for_dimensions(
+        page_index=page_index,
+        width=width,
+        height=height,
+        broken_json=broken_json,
+    )
+    response = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        timeout=timeout_seconds,
+        messages=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+    )
+    raw_json = _extract_json_text_anthropic(response)
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise GroundingJsonParseError(f"Invalid JSON from Anthropic repair response: {exc}", raw_json) from exc
+    return _validate_field_grounding_json(parsed, page_index=page_index, width=width, height=height)
+
+
 def _call_provider_for_page(
     *,
     provider: str,
     client: Any,
     model: str,
     timeout_seconds: float,
+    openai_max_output_tokens: int,
+    anthropic_max_tokens: int,
     page_index: int,
     width: int,
     height: int,
@@ -344,6 +465,7 @@ def _call_provider_for_page(
             client,
             model=model,
             timeout_seconds=timeout_seconds,
+            max_output_tokens=openai_max_output_tokens,
             page_index=page_index,
             width=width,
             height=height,
@@ -354,6 +476,7 @@ def _call_provider_for_page(
             client,
             model=model,
             timeout_seconds=timeout_seconds,
+            max_tokens=anthropic_max_tokens,
             page_index=page_index,
             width=width,
             height=height,
@@ -362,16 +485,68 @@ def _call_provider_for_page(
     raise ValueError(f"Unsupported provider: {provider}")
 
 
+def _repair_with_provider(
+    *,
+    provider: str,
+    openai_client: OpenAI | None,
+    provider_client: Any,
+    model: str,
+    openai_timeout_seconds: float,
+    anthropic_timeout_seconds: float,
+    openai_max_output_tokens: int,
+    anthropic_max_tokens: int,
+    page_index: int,
+    width: int,
+    height: int,
+    broken_json: str,
+) -> dict[str, Any]:
+    if openai_client is not None:
+        return _call_openai_repair_json(
+            openai_client,
+            model="gpt-5.5",
+            timeout_seconds=openai_timeout_seconds,
+            max_output_tokens=openai_max_output_tokens,
+            page_index=page_index,
+            width=width,
+            height=height,
+            broken_json=broken_json,
+        )
+    if provider == "openai":
+        return _call_openai_repair_json(
+            provider_client,
+            model=model,
+            timeout_seconds=openai_timeout_seconds,
+            max_output_tokens=openai_max_output_tokens,
+            page_index=page_index,
+            width=width,
+            height=height,
+            broken_json=broken_json,
+        )
+    return _call_anthropic_repair_json(
+        provider_client,
+        model=model,
+        timeout_seconds=anthropic_timeout_seconds,
+        max_tokens=anthropic_max_tokens,
+        page_index=page_index,
+        width=width,
+        height=height,
+        broken_json=broken_json,
+    )
+
+
 def run_field_grounding_for_job(
     *,
     job_id: str,
     output_dir: Path,
     provider: str,
     model: str,
+    page_index: int | None = None,
     openai_api_key: str,
     openai_timeout_seconds: float,
+    openai_max_output_tokens: int,
     anthropic_api_key: str,
     anthropic_timeout_seconds: float,
+    anthropic_max_tokens: int,
 ) -> dict[str, Any]:
     """Ground all converted page images for a completed conversion job."""
     provider = provider.strip().lower()
@@ -382,8 +557,11 @@ def run_field_grounding_for_job(
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
     pages = _discover_page_images(output_dir)
-    run_dir_name = _provider_model_dir_name(provider, model)
-    field_dir = output_dir / "field_grounding" / run_dir_name
+    if page_index is not None:
+        pages = [(idx, path) for idx, path in pages if idx == page_index]
+        if not pages:
+            raise ValueError(f"page_index {page_index} not found in converted_images")
+    field_dir = output_dir / "field_grounding"
     field_dir.mkdir(parents=True, exist_ok=True)
 
     client = _create_provider_client(
@@ -391,6 +569,9 @@ def run_field_grounding_for_job(
         openai_api_key=openai_api_key,
         anthropic_api_key=anthropic_api_key,
     )
+    repair_openai_client: OpenAI | None = None
+    if openai_api_key.strip():
+        repair_openai_client = OpenAI(api_key=openai_api_key)
     timeout_seconds = openai_timeout_seconds if provider == "openai" else anthropic_timeout_seconds
 
     page_results: list[dict[str, Any]] = []
@@ -398,60 +579,103 @@ def run_field_grounding_for_job(
 
     for page_index, image_path in pages:
         image_rel = str(image_path.relative_to(output_dir)).replace("\\", "/")
+        parse_errors: list[GroundingJsonParseError] = []
         try:
             width, height = _read_png_dimensions(image_path)
-            validated = _call_provider_for_page(
-                provider=provider,
-                client=client,
-                model=model,
-                timeout_seconds=timeout_seconds,
-                page_index=page_index,
-                width=width,
-                height=height,
-                image_path=image_path,
-            )
+            validated: dict[str, Any] | None = None
+            resolution = "direct"
+            for _attempt in range(_MAX_PARSE_RETRIES + 1):
+                try:
+                    validated = _call_provider_for_page(
+                        provider=provider,
+                        client=client,
+                        model=model,
+                        timeout_seconds=timeout_seconds,
+                        openai_max_output_tokens=openai_max_output_tokens,
+                        anthropic_max_tokens=anthropic_max_tokens,
+                        page_index=page_index,
+                        width=width,
+                        height=height,
+                        image_path=image_path,
+                    )
+                    resolution = "direct" if _attempt == 0 else "retry"
+                    break
+                except GroundingJsonParseError as exc:
+                    parse_errors.append(exc)
+            if validated is None:
+                repair_source = parse_errors[-1]
+                validated = _repair_with_provider(
+                    provider=provider,
+                    openai_client=repair_openai_client,
+                    provider_client=client,
+                    model=model,
+                    openai_timeout_seconds=openai_timeout_seconds,
+                    anthropic_timeout_seconds=anthropic_timeout_seconds,
+                    openai_max_output_tokens=openai_max_output_tokens,
+                    anthropic_max_tokens=anthropic_max_tokens,
+                    page_index=page_index,
+                    width=width,
+                    height=height,
+                    broken_json=repair_source.raw_text,
+                )
+                resolution = "repair"
             validated["provider"] = provider
             validated["model"] = model
             validated["run_id"] = run_id
             out_name = f"page_{page_index + 1:04d}.fields.json"
             out_path = field_dir / out_name
             out_path.write_text(json.dumps(validated, indent=2) + "\n", encoding="utf-8")
-            out_rel = f"field_grounding/{run_dir_name}/{out_name}"
+            out_rel = f"field_grounding/{out_name}"
             output_files.append(out_rel)
             page_results.append(
                 {
                     "page_index": page_index,
                     "image_path": image_rel,
                     "status": "succeeded",
+                    "resolution": resolution,
                     "output_file": out_rel,
                 }
             )
         except Exception as exc:  # noqa: BLE001 - keep POC error handling simple
+            raw_output_rel: str | None = None
+            if parse_errors:
+                raw_name = f"page_{page_index + 1:04d}.failed.raw.txt"
+                raw_path = field_dir / raw_name
+                raw_path.write_text(parse_errors[-1].raw_text, encoding="utf-8")
+                raw_output_rel = f"field_grounding/{raw_name}"
+                output_files.append(raw_output_rel)
+            elif isinstance(exc, GroundingJsonParseError):
+                raw_name = f"page_{page_index + 1:04d}.failed.raw.txt"
+                raw_path = field_dir / raw_name
+                raw_path.write_text(exc.raw_text, encoding="utf-8")
+                raw_output_rel = f"field_grounding/{raw_name}"
+                output_files.append(raw_output_rel)
             page_results.append(
                 {
                     "page_index": page_index,
                     "image_path": image_rel,
                     "status": "failed",
                     "error": str(exc),
+                    **({"raw_model_output_file": raw_output_rel} if raw_output_rel else {}),
                 }
             )
 
     succeeded_count = sum(1 for p in page_results if p["status"] == "succeeded")
     failed_count = len(page_results) - succeeded_count
     stamping_name, _ = _build_stamping_sample(field_dir)
-    stamping_rel = f"field_grounding/{run_dir_name}/{stamping_name}"
+    stamping_rel = f"field_grounding/{stamping_name}"
     output_files.append(stamping_rel)
 
-    manifest_rel = f"field_grounding/{run_dir_name}/manifest.json"
+    manifest_rel = "field_grounding/manifest.json"
     manifest = {
         "job_id": job_id,
         "provider": provider,
         "model": model,
         "run_id": run_id,
-        "run_dir": f"field_grounding/{run_dir_name}",
+        "run_dir": "field_grounding",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "page_count": len(page_results),
-        "output_dir": f"field_grounding/{run_dir_name}",
+        "output_dir": "field_grounding",
         "files": output_files,
         "succeeded_count": succeeded_count,
         "failed_count": failed_count,
@@ -464,11 +688,11 @@ def run_field_grounding_for_job(
         "provider": provider,
         "model": model,
         "run_id": run_id,
-        "run_dir": f"field_grounding/{run_dir_name}",
+        "run_dir": "field_grounding",
         "page_count": len(page_results),
         "succeeded_count": succeeded_count,
         "failed_count": failed_count,
-        "output_dir": f"field_grounding/{run_dir_name}",
+        "output_dir": "field_grounding",
         "manifest_path": manifest_rel,
         "stamping_sample_path": stamping_rel,
         "pages": page_results,
