@@ -13,6 +13,12 @@ from typing import Any
 from anthropic import Anthropic
 from openai import OpenAI
 
+from app.grounding_field_types import (
+    TOGGLE_GROUNDING_TYPES,
+    allowed_types_sorted_join,
+    is_supported_grounding_field_type,
+)
+
 _PAGE_IMAGE_RE = re.compile(r"^page_(\d{4})\.png$")
 _SUPPORTED_PROVIDERS = {"openai", "anthropic"}
 _MAX_PARSE_RETRIES = 1
@@ -47,11 +53,25 @@ Required output format:
   "fields": [
     {
       "field_id": "<field_id>",
-      "type": "text",
+      "type": "<one of the allowed literals below>",
       "bbox": { "x": <int>, "y": <int>, "w": <int>, "h": <int> }
     }
   ]
 }
+
+Allowed values for each field's "type" (use exactly these strings, lowercase snake_case):
+- text — single-line text entry box (narrow horizontal blank area).
+- multiline_text — paragraph box or tall writable region intended for multiple lines.
+- checkbox — square checkbox control near its label.
+- radio — circular radio option within a mutually exclusive choice group (stamp ONE bbox per circle option).
+- dropdown — compact closed combo box or obvious dropdown arrow / folded selection UI.
+- list_box — visible scrolling list of choices.
+
+Classification hints:
+- Small square boxes (~equal width and height) next to yes/no or checklist wording → checkbox.
+- Small circles / bullets where labels indicate picking one option in a row or cluster → radio.
+- Blank rectangle clearly taller than a single text row → multiline_text.
+- Narrow horizontal underline-style blanks → text unless obviously dropdown/list_box.
 
 Rules:
 1. Return JSON only. No markdown. No prose. No explanation.
@@ -74,7 +94,7 @@ Rules:
     - field_2
 14. Each field object must contain exactly:
     - field_id
-    - type
+    - type (must be exactly one of: text, multiline_text, checkbox, radio, dropdown, list_box)
     - bbox
 15. Each bbox must contain exactly:
     - x
@@ -108,7 +128,7 @@ Return ONLY a valid JSON object that matches this exact schema and constraints:
   "fields": [
     {
       "field_id": "<non-empty string>",
-      "type": "<non-empty string>",
+      "type": "<exactly one of: text, multiline_text, checkbox, radio, dropdown, list_box>",
       "bbox": { "x": <int>, "y": <int>, "w": <int>, "h": <int> }
     }
   ]
@@ -120,7 +140,7 @@ Rules:
 3. page_index must be {{PAGE_INDEX}}.
 4. width must be {{IMAGE_WIDTH}} and height must be {{IMAGE_HEIGHT}}.
 5. unit must be "px" and origin must be "top-left".
-6. Every field must contain exactly: field_id, type, bbox.
+6. Every field must contain exactly: field_id, type, bbox. The type string MUST be one of: text, multiline_text, checkbox, radio, dropdown, list_box.
 7. Every bbox must contain exactly: x, y, w, h.
 8. bbox values must be integers.
 9. Do not add any extra keys anywhere.
@@ -234,6 +254,9 @@ def _validate_field_grounding_json(data: Any, *, page_index: int, width: int, he
             raise ValueError(f"fields[{i}].field_id must be a non-empty string")
         if not isinstance(field["type"], str) or not field["type"].strip():
             raise ValueError(f"fields[{i}].type must be a non-empty string")
+        if not is_supported_grounding_field_type(field["type"]):
+            allowed = allowed_types_sorted_join()
+            raise ValueError(f"fields[{i}].type must be one of: {allowed}")
 
         bbox = field["bbox"]
         if not isinstance(bbox, dict):
@@ -357,7 +380,11 @@ def _build_stamping_sample(field_dir: Path) -> tuple[str, dict[str, Any]]:
             if not isinstance(field_id, str) or not field_id:
                 continue
             if field_id not in values:
-                values[field_id] = field_id[:10]
+                ftype = field.get("type")
+                if isinstance(ftype, str) and ftype in TOGGLE_GROUNDING_TYPES:
+                    values[field_id] = "true"
+                else:
+                    values[field_id] = field_id[:10]
     stamping_payload: dict[str, Any] = {
         "values": values,
         "require_all_values": False,

@@ -11,6 +11,14 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+from app.grounding_field_types import (
+    is_supported_grounding_field_type,
+    is_toggle_value_truthy,
+    stamps_as_text,
+    stamps_as_toggle,
+)
+from app.vector_tick import tick_points_in_rect, tick_stroke_width_px
+
 _GROUNDING_PAGE_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -133,6 +141,27 @@ def stamp_text_into_bbox(
     return True
 
 
+def stamp_toggle_mark_into_bbox(
+    draw: ImageDraw.ImageDraw,
+    *,
+    bbox: dict[str, int],
+    style: StampImageStyle,
+) -> bool:
+    """Draw a vector check mark (two strokes) for checkbox/radio regions."""
+    p = style.padding_px
+    iw = bbox["w"] - 2 * p
+    ih = bbox["h"] - 2 * p
+    if iw < 4 or ih < 4:
+        return False
+    ix = bbox["x"] + p
+    iy = bbox["y"] + p
+    (x1, y1), (x2, y2), (x3, y3) = tick_points_in_rect(float(ix), float(iy), float(iw), float(ih))
+    lw = tick_stroke_width_px(min(iw, ih))
+    draw.line([(x1, y1), (x2, y2)], fill=style.font_color, width=lw)
+    draw.line([(x2, y2), (x3, y3)], fill=style.font_color, width=lw)
+    return True
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -244,7 +273,8 @@ def stamp_page_image(
         if not isinstance(field, dict):
             raise ValueError(f"fields[{idx}] must be an object.")
         field_id = field.get("field_id")
-        field_type = field.get("type")
+        field_type_raw = field.get("type")
+        field_type = field_type_raw if isinstance(field_type_raw, str) else ""
         if not isinstance(field_id, str) or not field_id.strip():
             raise ValueError(f"fields[{idx}].field_id must be a non-empty string.")
         bbox = _bbox_from_field(field, width_px=width_px, height_px=height_px, field_index=idx)
@@ -256,17 +286,29 @@ def stamp_page_image(
                 width=2,
             )
 
-        if field_type != "text":
+        if not is_supported_grounding_field_type(field_type):
             unsupported_count += 1
-            warnings.append(f"Skipped unsupported field type for {field_id}: {field_type}")
+            warnings.append(f"Skipped unsupported field type for {field_id}: {field_type_raw!r}")
             continue
 
-        if field_id not in values:
-            missing_values.append(field_id)
-            continue
-
-        if stamp_text_into_bbox(draw, bbox=bbox, text=values[field_id], style=style):
-            stamped_count += 1
+        if stamps_as_text(field_type):
+            if field_id not in values:
+                missing_values.append(field_id)
+                continue
+            text_val = values[field_id]
+            if text_val == "":
+                continue
+            if stamp_text_into_bbox(draw, bbox=bbox, text=text_val, style=style):
+                stamped_count += 1
+        elif stamps_as_toggle(field_type):
+            if field_id not in values:
+                missing_values.append(field_id)
+                continue
+            raw_val = values[field_id]
+            if not is_toggle_value_truthy(raw_val):
+                continue
+            if stamp_toggle_mark_into_bbox(draw, bbox=bbox, style=style):
+                stamped_count += 1
 
     if require_all_values and missing_values:
         raise ValueError(f"Missing values for field_id(s): {', '.join(sorted(missing_values))}")

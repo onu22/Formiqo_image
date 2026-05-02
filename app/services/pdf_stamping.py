@@ -11,6 +11,14 @@ from typing import Any
 
 import fitz
 
+from app.grounding_field_types import (
+    is_supported_grounding_field_type,
+    is_toggle_value_truthy,
+    stamps_as_text,
+    stamps_as_toggle,
+)
+from app.vector_tick import tick_points_in_rect, tick_stroke_width_pt
+
 _GROUNDING_PAGE_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -188,6 +196,36 @@ def _fit_fontsize_for_rect(value: str, *, rect: fitz.Rect, preferred_size: float
     return 5.0
 
 
+def _stamp_toggle_mark_pdf(
+    page: fitz.Page,
+    *,
+    rect: fitz.Rect,
+    font_color: tuple[float, float, float],
+) -> bool:
+    """Draw a vector check mark using two line segments (PDF points)."""
+    inner_w = rect.width
+    inner_h = rect.height
+    if inner_w < 3 or inner_h < 3:
+        return False
+    (x1, y1), (x2, y2), (x3, y3) = tick_points_in_rect(rect.x0, rect.y0, inner_w, inner_h)
+    lw = tick_stroke_width_pt(min(inner_w, inner_h))
+    page.draw_line(
+        fitz.Point(x1, y1),
+        fitz.Point(x2, y2),
+        color=font_color,
+        width=lw,
+        overlay=True,
+    )
+    page.draw_line(
+        fitz.Point(x2, y2),
+        fitz.Point(x3, y3),
+        color=font_color,
+        width=lw,
+        overlay=True,
+    )
+    return True
+
+
 def run_pdf_stamping_for_job(
     *,
     job_id: str,
@@ -260,7 +298,8 @@ def run_pdf_stamping_for_job(
                     if not isinstance(field, dict):
                         raise ValueError(f"fields[{idx}] must be an object.")
                     field_id = field.get("field_id")
-                    field_type = field.get("type")
+                    field_type_raw = field.get("type")
+                    field_type = field_type_raw if isinstance(field_type_raw, str) else ""
                     if not isinstance(field_id, str) or not field_id.strip():
                         raise ValueError(f"fields[{idx}].field_id must be a non-empty string.")
 
@@ -294,26 +333,37 @@ def run_pdf_stamping_for_job(
                             overlay=True,
                         )
 
-                    if field_type != "text":
+                    if not is_supported_grounding_field_type(field_type):
                         unsupported_count += 1
-                        warnings.append(f"Skipped unsupported field type for {field_id}: {field_type}")
-                        continue
-                    if field_id not in values:
-                        missing_values.append(field_id)
+                        warnings.append(f"Skipped unsupported field type for {field_id}: {field_type_raw!r}")
                         continue
 
-                    text_value = values[field_id]
-                    if text_value == "":
-                        continue
-                    font_size = _fit_fontsize_for_rect(text_value, rect=rect, preferred_size=style.font_size_pt)
-                    page.insert_text(
-                        fitz.Point(rect.x0, rect.y0 + font_size),
-                        fontsize=font_size,
-                        text=text_value,
-                        color=font_color,
-                        overlay=True,
-                    )
-                    stamped_count += 1
+                    if stamps_as_text(field_type):
+                        if field_id not in values:
+                            missing_values.append(field_id)
+                            continue
+
+                        text_value = values[field_id]
+                        if text_value == "":
+                            continue
+                        font_size = _fit_fontsize_for_rect(text_value, rect=rect, preferred_size=style.font_size_pt)
+                        page.insert_text(
+                            fitz.Point(rect.x0, rect.y0 + font_size),
+                            fontsize=font_size,
+                            text=text_value,
+                            color=font_color,
+                            overlay=True,
+                        )
+                        stamped_count += 1
+                    elif stamps_as_toggle(field_type):
+                        if field_id not in values:
+                            missing_values.append(field_id)
+                            continue
+                        raw_val = values[field_id]
+                        if not is_toggle_value_truthy(raw_val):
+                            continue
+                        if _stamp_toggle_mark_pdf(page, rect=rect, font_color=font_color):
+                            stamped_count += 1
 
                 if require_all_values and missing_values:
                     raise ValueError(f"Missing values for field_id(s): {', '.join(sorted(missing_values))}")
