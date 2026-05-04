@@ -52,7 +52,6 @@ def create_app() -> FastAPI:
             "service": settings.api_title,
             "docs": "/docs",
             "redoc": "/redoc",
-            "convert": "/api/v1/convert",
         }
 
     return application

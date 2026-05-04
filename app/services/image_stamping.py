@@ -342,6 +342,40 @@ def _discover_grounding_pages(grounding_dir: Path) -> list[tuple[int, Path]]:
     return pages
 
 
+def stamp_qa_preview_pages(
+    *,
+    output_dir: Path,
+    provider: str,
+    refined_grounding_dir: Path,
+    preview_run_dir: Path,
+    values: dict[str, str],
+    style: StampImageStyle,
+    require_all_values: bool,
+) -> list[dict[str, Any]]:
+    """
+    Stamp previews using grounding JSON files under ``refined_grounding_dir`` (per-page paths).
+
+    Writes ``page_XXXX.{provider}.stamped.png`` under ``preview_run_dir``.
+    """
+    provider_norm = provider.strip().lower()
+    preview_run_dir.mkdir(parents=True, exist_ok=True)
+    pages = _discover_grounding_pages(refined_grounding_dir)
+    results: list[dict[str, Any]] = []
+    for page_index, grounding_path in pages:
+        output_image_path = preview_run_dir / f"page_{page_index + 1:04d}.{provider_norm}.stamped.png"
+        page_result = stamp_page_image(
+            output_dir=output_dir,
+            page_index=page_index,
+            grounding_path=grounding_path,
+            output_image_path=output_image_path,
+            values=values,
+            style=style,
+            require_all_values=require_all_values,
+        )
+        results.append(page_result)
+    return results
+
+
 def _assert_grounding_run_matches(grounding_dir: Path, *, provider: str, model: str) -> None:
     manifest_path = grounding_dir / "manifest.json"
     if not manifest_path.is_file():

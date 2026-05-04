@@ -48,13 +48,6 @@ class GroundFieldsResponse(BaseModel):
     pages: list[GroundFieldsPageResult]
 
 
-class GroundFieldsRequest(BaseModel):
-    model_config = {"extra": "forbid"}
-    provider: str = Field(min_length=1)
-    model: str = Field(min_length=1)
-    page_index: int | None = Field(default=None, ge=0)
-
-
 class ConvertAndGroundResponse(BaseModel):
     job_id: str
     convert: ConvertResponse
@@ -67,12 +60,6 @@ class StampImagesStyle(BaseModel):
     padding_px: int = Field(default=3, ge=0, le=200)
     draw_debug_boxes: bool = False
     debug_box_color: str = Field(default="#ff0000", pattern=r"^#[0-9a-fA-F]{6}$")
-
-
-class StampImagesProviderRequest(BaseModel):
-    values: dict[str, str] = Field(default_factory=dict)
-    style: StampImagesStyle | None = None
-    require_all_values: bool = False
 
 
 class StampImagesPageResult(BaseModel):
@@ -110,10 +97,14 @@ class StampPdfStyle(BaseModel):
     debug_box_color: str = Field(default="#ff0000", pattern=r"^#[0-9a-fA-F]{6}$")
 
 
-class StampPdfProviderRequest(BaseModel):
-    model_config = {"extra": "forbid"}
+class StampingJson(BaseModel):
+    """On-disk config at ``field_grounding/stamping.json`` (written during grounding)."""
+
+    model_config = {"extra": "ignore"}
+
     values: dict[str, str] = Field(default_factory=dict)
     require_all_values: bool = False
+    image_style: StampImagesStyle | None = None
 
 
 class StampPdfPageResult(BaseModel):
@@ -143,3 +134,26 @@ class StampPdfResponse(BaseModel):
     succeeded_count: int
     failed_count: int
     pages: list[StampPdfPageResult]
+
+
+class RefineGroundingIterationPage(BaseModel):
+    page_index: int
+    qa_status: str
+    corrections_requested: int = 0
+    preview_image: str | None = None
+    note: str | None = None
+
+
+class RefineGroundingResponse(BaseModel):
+    job_id: str
+    provider: str
+    model: str
+    session_id: str
+    promoted: bool
+    stopped_reason: str
+    iterations_run: int
+    refined_dir: str
+    qa_session_dir: str
+    final_preview_dir: str
+    canonical_grounding_updated: bool
+    iterations: list[list[RefineGroundingIterationPage]]

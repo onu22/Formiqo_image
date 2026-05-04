@@ -272,6 +272,7 @@ def convert_pdf_to_images(
     *,
     overwrite: bool = False,
     allow_rotated_pages: bool = False,
+    job_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Render every page of ``pdf_path`` to PNG under ``output_dir/converted_images``
@@ -379,16 +380,18 @@ def convert_pdf_to_images(
     images_manifest_path = images_dir / "manifest.json"
     document_manifest_path = out_root / "document_manifest.json"
 
-    images_manifest = {
+    images_manifest: dict[str, Any] = {
         "manifest_version": MANIFEST_VERSION,
         "source_pdf": str(pdf_file),
         "output_dir": str(out_root),
         "dpi": dpi,
         "pages": page_summaries,
     }
+    if job_id:
+        images_manifest["job_id"] = job_id
     images_manifest_path.write_text(json.dumps(images_manifest, indent=2) + "\n", encoding="utf-8")
 
-    document_manifest = {
+    document_manifest: dict[str, Any] = {
         "manifest_version": MANIFEST_VERSION,
         "source_pdf": str(pdf_file),
         "output_dir": str(out_root),
@@ -403,6 +406,8 @@ def convert_pdf_to_images(
             for p in page_summaries
         ],
     }
+    if job_id:
+        document_manifest["job_id"] = job_id
     document_manifest_path.write_text(
         json.dumps(document_manifest, indent=2) + "\n", encoding="utf-8"
     )

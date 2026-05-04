@@ -8,26 +8,35 @@ import logging
 import shutil
 import uuid
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.dependencies import get_settings
 from app.schemas import (
     ConvertResponse,
     ConvertAndGroundResponse,
-    GroundFieldsRequest,
     GroundFieldsResponse,
-    StampImagesProviderRequest,
+    RefineGroundingIterationPage,
+    RefineGroundingResponse,
     StampImagesResponse,
-    StampPdfProviderRequest,
     StampPdfResponse,
+    StampingJson,
 )
 from app.services.conversion import run_convert_pdf_to_images
 from app.services.field_grounding import run_field_grounding_for_job
-from app.services.image_stamping import StampImageStyle, run_image_stamping_for_job
+from app.services.grounding_qa import run_grounding_qa_refinement_loop
+from app.services.image_stamping import _assert_grounding_run_matches, run_image_stamping_for_job
 from app.services.jobs import job_paths, provider_model_dir_name, read_document_manifest
 from app.services.pdf_stamping import StampPdfStyle, run_pdf_stamping_for_job
+from app.services.stamping_config import (
+    load_field_grounding_manifest,
+    load_stamping_json_parsed,
+    manifest_provider_model,
+    stamping_json_to_image_style,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -79,89 +88,59 @@ def _write_provider_metadata_to_document_manifest(
     return doc
 
 
-@router.post(
-    "/convert",
-    response_model=ConvertResponse,
-    summary="Upload and convert PDF pages only",
-    responses={
-        400: {"description": "Invalid PDF upload or request parameters"},
-        413: {"description": "Upload too large"},
-        422: {"description": "Conversion failed"},
-    },
-)
-async def convert_pdf(
-    file: UploadFile = File(..., description="Input PDF"),
-    dpi: float = Form(200.0, ge=1.0, le=1200.0, description="Rasterization DPI"),
-    allow_rotated_pages: bool = Form(
-        False,
-        description="If true, allow non-zero page.rotation (see manifest mapping.status).",
-    ),
-    settings: Settings = Depends(get_settings),
-) -> ConvertResponse:
-    filename = file.filename or ""
-    if not filename.lower().endswith(".pdf"):
-        await file.close()
-        raise HTTPException(status_code=400, detail="Upload filename must end with .pdf")
-
-    job_id = str(uuid.uuid4())
-    root, input_pdf, output_dir = job_paths(settings.jobs_dir, job_id)
-    root.mkdir(parents=True, exist_ok=True)
-
+def _http_load_field_grounding_manifest(output_dir: Path) -> dict[str, Any]:
     try:
-        await _save_upload_limited(file, input_pdf, max_bytes=settings.max_upload_bytes)
-        with input_pdf.open("rb") as handle:
-            header = handle.read(5)
-        if header != b"%PDF-":
-            raise HTTPException(status_code=400, detail="File does not look like a PDF (missing %PDF- header).")
-        try:
-            convert_result = await asyncio.to_thread(
-                run_convert_pdf_to_images,
-                str(input_pdf),
-                str(output_dir),
-                dpi,
-                overwrite=True,
-                allow_rotated_pages=allow_rotated_pages,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except FileExistsError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return load_field_grounding_manifest(output_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        doc = read_document_manifest(output_dir)
-        page_count = len(convert_result.get("pages", []))
-        return ConvertResponse(
-            job_id=job_id,
-            page_count=page_count,
-            dpi=dpi,
-            allow_rotated_pages=allow_rotated_pages,
-            source_filename=filename,
-            document_manifest=doc,
+
+def _http_load_stamping_json(output_dir: Path) -> StampingJson:
+    try:
+        return load_stamping_json_parsed(output_dir)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Invalid field_grounding/stamping.json", "errors": exc.errors()},
+        ) from exc
+
+
+def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_provider: str) -> tuple[str, str]:
+    try:
+        prov, model = manifest_provider_model(manifest)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    want = route_provider.strip().lower()
+    if prov != want:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Grounding manifest provider is {prov!r}; call POST .../stamp-images/{prov} "
+                f"(or stamp-pdf/{prov}), not {want!r}."
+            ),
         )
-    except HTTPException:
-        _cleanup_job_dir(root)
-        raise
-    except Exception:
-        _cleanup_job_dir(root)
-        raise
+    return prov, model
 
 
 @router.post(
-    "/jobs/{job_id}/ground-fields",
-    response_model=GroundFieldsResponse,
-    summary="Ground converted pages for a job using provider/model",
+    "/jobs/{job_id}/refine-grounding",
+    response_model=RefineGroundingResponse,
+    summary="Vision QA loop: refine grounding bboxes via stamped previews (delta patches)",
     responses={
-        400: {"description": "Invalid job, missing conversion outputs, or invalid provider/model"},
+        400: {"description": "Invalid job, manifest mismatch, or missing outputs"},
         404: {"description": "Job not found"},
-        422: {"description": "Grounding failed for all pages"},
     },
 )
-async def ground_fields_for_job(
+async def refine_grounding_for_job(
     job_id: str,
-    request_body: GroundFieldsRequest,
     settings: Settings = Depends(get_settings),
-) -> GroundFieldsResponse:
+) -> RefineGroundingResponse:
     try:
         root, _, output_dir = job_paths(settings.jobs_dir, job_id)
     except ValueError as exc:
@@ -171,47 +150,78 @@ async def ground_fields_for_job(
     if not output_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
 
-    provider = request_body.provider.strip().lower()
-    model = request_body.model.strip()
-    if not provider:
-        raise HTTPException(status_code=400, detail="provider must be a non-empty string.")
-    if not model:
-        raise HTTPException(status_code=400, detail="model must be a non-empty string.")
+    grounding_dir = output_dir / "field_grounding"
+    if not grounding_dir.is_dir():
+        raise HTTPException(status_code=400, detail="field_grounding not found for this job.")
 
-    _write_provider_metadata_to_document_manifest(output_dir=output_dir, provider=provider, model=model)
+    manifest = _http_load_field_grounding_manifest(output_dir)
+    try:
+        provider, model = manifest_provider_model(manifest)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        result = await asyncio.to_thread(
-            run_field_grounding_for_job,
+        _assert_grounding_run_matches(grounding_dir, provider=provider, model=model)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    stamping = _http_load_stamping_json(output_dir)
+    style = stamping_json_to_image_style(stamping)
+
+    try:
+        raw = await asyncio.to_thread(
+            run_grounding_qa_refinement_loop,
             job_id=job_id,
             output_dir=output_dir,
             provider=provider,
             model=model,
-            page_index=request_body.page_index,
+            values=stamping.values,
+            style=style,
+            require_all_values=stamping.require_all_values,
             openai_api_key=settings.openai_api_key,
             openai_timeout_seconds=settings.openai_timeout_seconds,
             openai_max_output_tokens=settings.grounding_openai_max_output_tokens,
             anthropic_api_key=settings.anthropic_api_key,
             anthropic_timeout_seconds=settings.anthropic_timeout_seconds,
             anthropic_max_tokens=settings.grounding_anthropic_max_tokens,
+            max_iterations=settings.grounding_qa_max_iterations,
+            max_bbox_delta_px=settings.grounding_qa_max_bbox_delta_px,
+            consensus_translation_enabled=settings.grounding_qa_consensus_translation_enabled,
+            consensus_min_fields=settings.grounding_qa_consensus_min_fields,
+            consensus_max_spread_px=settings.grounding_qa_consensus_max_spread_px,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if result["succeeded_count"] == 0:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Grounding failed for all pages.",
-                "job_id": job_id,
-                "provider": provider,
-                "model": model,
-                "page_count": result["page_count"],
-                "failed_count": result["failed_count"],
-                "pages": result["pages"],
-            },
-        )
-    return GroundFieldsResponse(**result)
+    iteration_models: list[list[RefineGroundingIterationPage]] = []
+    for outer in raw["iterations"]:
+        row: list[RefineGroundingIterationPage] = []
+        for p in outer:
+            row.append(
+                RefineGroundingIterationPage(
+                    page_index=p["page_index"],
+                    qa_status=p["qa_status"],
+                    corrections_requested=p.get("corrections_requested", 0),
+                    preview_image=p.get("preview_image"),
+                    note=p.get("note"),
+                )
+            )
+        iteration_models.append(row)
+
+    return RefineGroundingResponse(
+        job_id=raw["job_id"],
+        provider=raw["provider"],
+        model=raw["model"],
+        session_id=raw["session_id"],
+        promoted=raw["promoted"],
+        stopped_reason=raw["stopped_reason"],
+        iterations_run=raw["iterations_run"],
+        refined_dir=raw["refined_dir"],
+        qa_session_dir=raw["qa_session_dir"],
+        final_preview_dir=raw["final_preview_dir"],
+        canonical_grounding_updated=raw["canonical_grounding_updated"],
+        iterations=iteration_models,
+    )
 
 
 @router.post(
@@ -306,6 +316,7 @@ async def _convert_and_ground_for_provider(
                 dpi,
                 overwrite=True,
                 allow_rotated_pages=allow_rotated_pages,
+                job_id=job_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -397,14 +408,11 @@ async def _convert_and_ground_for_provider(
 )
 async def stamp_images_anthropic_for_job(
     job_id: str,
-    request_body: StampImagesProviderRequest | None = None,
     settings: Settings = Depends(get_settings),
 ) -> StampImagesResponse:
     return await _stamp_images_for_provider(
         job_id=job_id,
-        provider="anthropic",
-        default_model=settings.combined_default_anthropic_model,
-        request_body=request_body,
+        route_provider="anthropic",
         settings=settings,
     )
 
@@ -421,14 +429,11 @@ async def stamp_images_anthropic_for_job(
 )
 async def stamp_images_openai_for_job(
     job_id: str,
-    request_body: StampImagesProviderRequest | None = None,
     settings: Settings = Depends(get_settings),
 ) -> StampImagesResponse:
     return await _stamp_images_for_provider(
         job_id=job_id,
-        provider="openai",
-        default_model=settings.combined_default_openai_model,
-        request_body=request_body,
+        route_provider="openai",
         settings=settings,
     )
 
@@ -436,9 +441,7 @@ async def stamp_images_openai_for_job(
 async def _stamp_images_for_provider(
     *,
     job_id: str,
-    provider: str,
-    default_model: str,
-    request_body: StampImagesProviderRequest | None,
+    route_provider: str,
     settings: Settings,
 ) -> StampImagesResponse:
     try:
@@ -451,21 +454,10 @@ async def _stamp_images_for_provider(
     if not output_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
 
-    model = default_model.strip()
-    values = request_body.values if request_body else {}
-    style_in = request_body.style if request_body and request_body.style else None
-    style = (
-        StampImageStyle(
-            font_size_px=style_in.font_size_px,
-            font_color=style_in.font_color,
-            padding_px=style_in.padding_px,
-            draw_debug_boxes=style_in.draw_debug_boxes,
-            debug_box_color=style_in.debug_box_color,
-        )
-        if style_in
-        else StampImageStyle()
-    )
-    require_all_values = bool(request_body.require_all_values) if request_body else False
+    manifest = _http_load_field_grounding_manifest(output_dir)
+    provider, model = _manifest_provider_must_match_route_or_400(manifest, route_provider)
+    stamping = _http_load_stamping_json(output_dir)
+    style = stamping_json_to_image_style(stamping)
 
     try:
         result = await asyncio.to_thread(
@@ -474,9 +466,9 @@ async def _stamp_images_for_provider(
             output_dir=output_dir,
             provider=provider,
             model=model,
-            values=values,
+            values=stamping.values,
             style=style,
-            require_all_values=require_all_values,
+            require_all_values=stamping.require_all_values,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -512,14 +504,11 @@ async def _stamp_images_for_provider(
 )
 async def stamp_pdf_anthropic_for_job(
     job_id: str,
-    request_body: StampPdfProviderRequest | None = None,
     settings: Settings = Depends(get_settings),
 ) -> StampPdfResponse:
     return await _stamp_pdf_for_provider(
         job_id=job_id,
-        provider="anthropic",
-        default_model=settings.combined_default_anthropic_model,
-        request_body=request_body,
+        route_provider="anthropic",
         settings=settings,
     )
 
@@ -536,14 +525,11 @@ async def stamp_pdf_anthropic_for_job(
 )
 async def stamp_pdf_openai_for_job(
     job_id: str,
-    request_body: StampPdfProviderRequest | None = None,
     settings: Settings = Depends(get_settings),
 ) -> StampPdfResponse:
     return await _stamp_pdf_for_provider(
         job_id=job_id,
-        provider="openai",
-        default_model=settings.combined_default_openai_model,
-        request_body=request_body,
+        route_provider="openai",
         settings=settings,
     )
 
@@ -551,9 +537,7 @@ async def stamp_pdf_openai_for_job(
 async def _stamp_pdf_for_provider(
     *,
     job_id: str,
-    provider: str,
-    default_model: str,
-    request_body: StampPdfProviderRequest | None,
+    route_provider: str,
     settings: Settings,
 ) -> StampPdfResponse:
     try:
@@ -568,10 +552,10 @@ async def _stamp_pdf_for_provider(
     if not input_pdf.is_file():
         raise HTTPException(status_code=400, detail=f"Input PDF not found for job: {input_pdf}")
 
-    model = default_model.strip()
-    values = request_body.values if request_body else {}
+    manifest = _http_load_field_grounding_manifest(output_dir)
+    provider, model = _manifest_provider_must_match_route_or_400(manifest, route_provider)
+    stamping = _http_load_stamping_json(output_dir)
     style = StampPdfStyle()
-    require_all_values = bool(request_body.require_all_values) if request_body else False
 
     try:
         result = await asyncio.to_thread(
@@ -581,9 +565,9 @@ async def _stamp_pdf_for_provider(
             output_dir=output_dir,
             provider=provider,
             model=model,
-            values=values,
+            values=stamping.values,
             style=style,
-            require_all_values=require_all_values,
+            require_all_values=stamping.require_all_values,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

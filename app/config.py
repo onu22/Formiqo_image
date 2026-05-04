@@ -81,3 +81,31 @@ class Settings(BaseSettings):
         default="gpt-5.5",
         description="OpenAI model used by /convert-and-ground dual-default flow.",
     )
+    grounding_qa_max_iterations: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max stamp→QA→apply rounds for /refine-grounding.",
+    )
+    grounding_qa_max_bbox_delta_px: int = Field(
+        default=30,
+        ge=1,
+        le=200,
+        description="Max absolute bbox delta per axis per QA refinement iteration.",
+    )
+    grounding_qa_consensus_translation_enabled: bool = Field(
+        default=True,
+        description="When the LLM omits page_translation, merge similar per-field deltas into one translation.",
+    )
+    grounding_qa_consensus_min_fields: int = Field(
+        default=3,
+        ge=2,
+        le=500,
+        description="Minimum per-field corrections on a page to run consensus translation merge.",
+    )
+    grounding_qa_consensus_max_spread_px: int = Field(
+        default=4,
+        ge=0,
+        le=50,
+        description="Max spread (max-min) of delta components on an axis to treat as consensus.",
+    )

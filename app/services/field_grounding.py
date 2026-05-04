@@ -18,6 +18,7 @@ from app.grounding_field_types import (
     allowed_types_sorted_join,
     is_supported_grounding_field_type,
 )
+from app.schemas import StampImagesStyle
 
 _PAGE_IMAGE_RE = re.compile(r"^page_(\d{4})\.png$")
 _SUPPORTED_PROVIDERS = {"openai", "anthropic"}
@@ -388,6 +389,7 @@ def _build_stamping_sample(field_dir: Path) -> tuple[str, dict[str, Any]]:
     stamping_payload: dict[str, Any] = {
         "values": values,
         "require_all_values": False,
+        "image_style": StampImagesStyle().model_dump(),
     }
     stamping_name = "stamping.json"
     (field_dir / stamping_name).write_text(json.dumps(stamping_payload, indent=2) + "\n", encoding="utf-8")
