@@ -10,18 +10,20 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from pydantic import ValidationError
 
 from app.config import Settings
 from app.dependencies import get_settings
 from app.schemas import (
     ConvertResponse,
+    ConvertAndGroundRequest,
     ConvertAndGroundResponse,
     GroundFieldsResponse,
     RefineGroundingIterationPage,
     RefineGroundingResponse,
     StampImagesResponse,
+    StampProviderRequest,
     StampPdfResponse,
     StampingJson,
 )
@@ -111,6 +113,36 @@ def _http_load_stamping_json(output_dir: Path) -> StampingJson:
         ) from exc
 
 
+_CONVERT_AND_GROUND_REQUEST_DEFAULT = '{"provider":"anthropic","model":"claude-opus-4-7"}'
+
+
+def _parse_convert_and_ground_options(request_json: str, settings: Settings) -> tuple[str, str]:
+    """Parse multipart ``request`` field; return ``(provider, model)`` with server defaults applied."""
+    try:
+        body = ConvertAndGroundRequest.model_validate_json(request_json)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Invalid convert-and-ground request JSON", "errors": exc.errors()},
+        ) from exc
+
+    provider = body.provider.strip().lower()
+    raw_model = body.model.strip() if body.model else ""
+    if raw_model:
+        return provider, raw_model
+    if provider == "anthropic":
+        resolved = settings.combined_default_anthropic_model.strip()
+    else:
+        resolved = settings.combined_default_openai_model.strip()
+    if not resolved:
+        raise HTTPException(
+            status_code=400,
+            detail="Resolved model is empty; set `model` in the request JSON or configure "
+            "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL / FORMIQO_COMBINED_DEFAULT_OPENAI_MODEL.",
+        )
+    return provider, resolved
+
+
 def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_provider: str) -> tuple[str, str]:
     try:
         prov, model = manifest_provider_model(manifest)
@@ -121,8 +153,8 @@ def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_p
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Grounding manifest provider is {prov!r}; call POST .../stamp-images/{prov} "
-                f"(or stamp-pdf/{prov}), not {want!r}."
+                f"Grounding manifest provider is {prov!r}; POST .../stamp-images or .../stamp-pdf "
+                f'with JSON {{"provider":"{prov}"}}, not provider={want!r}.'
             ),
         )
     return prov, model
@@ -225,59 +257,39 @@ async def refine_grounding_for_job(
 
 
 @router.post(
-    "/convert-and-ground/anthropic",
+    "/convert-and-ground",
     response_model=ConvertAndGroundResponse,
-    summary="Upload, convert, then ground with Anthropic in one request",
+    summary="Upload PDF, convert to images, then field-ground (provider + model via JSON form field)",
     responses={
-        400: {"description": "Invalid PDF upload or request parameters"},
+        400: {"description": "Invalid PDF upload, request JSON, or parameters"},
         413: {"description": "Upload too large"},
         422: {"description": "Conversion or grounding failed"},
     },
 )
-async def convert_and_ground_anthropic(
+async def convert_and_ground(
     file: UploadFile = File(..., description="Input PDF"),
     dpi: float = Form(200.0, ge=1.0, le=1200.0, description="Rasterization DPI"),
     allow_rotated_pages: bool = Form(
         False,
         description="If true, allow non-zero page.rotation (see manifest mapping.status).",
     ),
-    settings: Settings = Depends(get_settings),
-) -> ConvertAndGroundResponse:
-    return await _convert_and_ground_for_provider(
-        file=file,
-        dpi=dpi,
-        allow_rotated_pages=allow_rotated_pages,
-        provider="anthropic",
-        model=settings.combined_default_anthropic_model.strip(),
-        settings=settings,
-    )
-
-
-@router.post(
-    "/convert-and-ground/openai",
-    response_model=ConvertAndGroundResponse,
-    summary="Upload, convert, then ground with OpenAI in one request",
-    responses={
-        400: {"description": "Invalid PDF upload or request parameters"},
-        413: {"description": "Upload too large"},
-        422: {"description": "Conversion or grounding failed"},
-    },
-)
-async def convert_and_ground_openai(
-    file: UploadFile = File(..., description="Input PDF"),
-    dpi: float = Form(200.0, ge=1.0, le=1200.0, description="Rasterization DPI"),
-    allow_rotated_pages: bool = Form(
-        False,
-        description="If true, allow non-zero page.rotation (see manifest mapping.status).",
+    request: str = Form(
+        default=_CONVERT_AND_GROUND_REQUEST_DEFAULT,
+        description=(
+            'JSON object: {"provider":"anthropic"|"openai","model":"<optional>"}. '
+            "Swagger default is Anthropic + claude-opus-4-7. Omit model or use null to use "
+            "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL / FORMIQO_COMBINED_DEFAULT_OPENAI_MODEL."
+        ),
     ),
     settings: Settings = Depends(get_settings),
 ) -> ConvertAndGroundResponse:
+    provider, model = _parse_convert_and_ground_options(request, settings)
     return await _convert_and_ground_for_provider(
         file=file,
         dpi=dpi,
         allow_rotated_pages=allow_rotated_pages,
-        provider="openai",
-        model=settings.combined_default_openai_model.strip(),
+        provider=provider,
+        model=model,
         settings=settings,
     )
 
@@ -397,43 +409,24 @@ async def _convert_and_ground_for_provider(
 
 
 @router.post(
-    "/jobs/{job_id}/stamp-images/anthropic",
+    "/jobs/{job_id}/stamp-images",
     response_model=StampImagesResponse,
-    summary="Stamp values onto images using Anthropic grounding JSON",
+    summary="Stamp values onto images (provider in JSON body; must match grounding manifest)",
     responses={
         400: {"description": "Invalid job, missing converted images, or missing grounding run"},
         404: {"description": "Job not found"},
         422: {"description": "No pages succeeded image stamping"},
     },
 )
-async def stamp_images_anthropic_for_job(
+async def stamp_images_for_job(
     job_id: str,
+    body: StampProviderRequest = Body(default_factory=StampProviderRequest),
     settings: Settings = Depends(get_settings),
 ) -> StampImagesResponse:
+    route_provider = body.provider.strip().lower()
     return await _stamp_images_for_provider(
         job_id=job_id,
-        route_provider="anthropic",
-        settings=settings,
-    )
-
-
-@router.post(
-    "/jobs/{job_id}/stamp-images/openai",
-    response_model=StampImagesResponse,
-    summary="Stamp values onto images using OpenAI grounding JSON",
-    responses={
-        400: {"description": "Invalid job, missing converted images, or missing grounding run"},
-        404: {"description": "Job not found"},
-        422: {"description": "No pages succeeded image stamping"},
-    },
-)
-async def stamp_images_openai_for_job(
-    job_id: str,
-    settings: Settings = Depends(get_settings),
-) -> StampImagesResponse:
-    return await _stamp_images_for_provider(
-        job_id=job_id,
-        route_provider="openai",
+        route_provider=route_provider,
         settings=settings,
     )
 
@@ -493,43 +486,24 @@ async def _stamp_images_for_provider(
 
 
 @router.post(
-    "/jobs/{job_id}/stamp-pdf/anthropic",
+    "/jobs/{job_id}/stamp-pdf",
     response_model=StampPdfResponse,
-    summary="Stamp values onto original PDF using Anthropic grounding JSON",
+    summary="Stamp values onto original PDF (provider in JSON body; must match grounding manifest)",
     responses={
         400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
         404: {"description": "Job not found"},
         422: {"description": "No pages succeeded PDF stamping"},
     },
 )
-async def stamp_pdf_anthropic_for_job(
+async def stamp_pdf_for_job(
     job_id: str,
+    body: StampProviderRequest = Body(default_factory=StampProviderRequest),
     settings: Settings = Depends(get_settings),
 ) -> StampPdfResponse:
+    route_provider = body.provider.strip().lower()
     return await _stamp_pdf_for_provider(
         job_id=job_id,
-        route_provider="anthropic",
-        settings=settings,
-    )
-
-
-@router.post(
-    "/jobs/{job_id}/stamp-pdf/openai",
-    response_model=StampPdfResponse,
-    summary="Stamp values onto original PDF using OpenAI grounding JSON",
-    responses={
-        400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
-        404: {"description": "Job not found"},
-        422: {"description": "No pages succeeded PDF stamping"},
-    },
-)
-async def stamp_pdf_openai_for_job(
-    job_id: str,
-    settings: Settings = Depends(get_settings),
-) -> StampPdfResponse:
-    return await _stamp_pdf_for_provider(
-        job_id=job_id,
-        route_provider="openai",
+        route_provider=route_provider,
         settings=settings,
     )
 

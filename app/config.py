@@ -75,11 +75,11 @@ class Settings(BaseSettings):
     )
     combined_default_anthropic_model: str = Field(
         default="claude-opus-4-7",
-        description="Anthropic model used by /convert-and-ground dual-default flow.",
+        description='Default Anthropic model when POST /convert-and-ground JSON omits "model" for provider anthropic.',
     )
     combined_default_openai_model: str = Field(
         default="gpt-5.5",
-        description="OpenAI model used by /convert-and-ground dual-default flow.",
+        description='Default OpenAI model when POST /convert-and-ground JSON omits "model" for provider openai.',
     )
     grounding_qa_max_iterations: int = Field(
         default=3,

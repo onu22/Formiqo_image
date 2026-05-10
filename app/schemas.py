@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -48,10 +48,32 @@ class GroundFieldsResponse(BaseModel):
     pages: list[GroundFieldsPageResult]
 
 
+class ConvertAndGroundRequest(BaseModel):
+    """JSON payload for the multipart ``request`` field on ``POST /convert-and-ground``."""
+
+    provider: Literal["openai", "anthropic"] = "anthropic"
+    model: str | None = Field(
+        default=None,
+        description="Vision model id; omit or null to use server default for the chosen provider.",
+    )
+
+
 class ConvertAndGroundResponse(BaseModel):
     job_id: str
     convert: ConvertResponse
     grounding: GroundFieldsResponse
+
+
+class StampProviderRequest(BaseModel):
+    """JSON body for ``POST .../stamp-images`` and ``POST .../stamp-pdf``."""
+
+    provider: Literal["openai", "anthropic"] = Field(
+        default="anthropic",
+        description="Must match field_grounding/manifest.json provider.",
+    )
+
+
+StampImagesRequest = StampProviderRequest
 
 
 class StampImagesStyle(BaseModel):
