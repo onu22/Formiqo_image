@@ -20,18 +20,20 @@ from app.schemas import (
     ConvertAndGroundRequest,
     ConvertAndGroundResponse,
     GroundFieldsResponse,
+    ProcessUserUploadsResponse,
     RefineGroundingIterationPage,
+    UserUploadProcessItem,
     RefineGroundingResponse,
     StampImagesResponse,
     StampProviderRequest,
     StampPdfResponse,
     StampingJson,
 )
-from app.services.conversion import run_convert_pdf_to_images
-from app.services.field_grounding import run_field_grounding_for_job
+from app.services.convert_and_ground_job import run_convert_and_ground_sync
+from app.services.pdf_pipeline import scan_and_process_user_uploads
 from app.services.grounding_qa import run_grounding_qa_refinement_loop
 from app.services.image_stamping import _assert_grounding_run_matches, run_image_stamping_for_job
-from app.services.jobs import job_paths, provider_model_dir_name, read_document_manifest
+from app.services.jobs import job_paths
 from app.services.pdf_stamping import StampPdfStyle, run_pdf_stamping_for_job
 from app.services.stamping_config import (
     load_field_grounding_manifest,
@@ -73,21 +75,6 @@ async def _save_upload_limited(
 def _cleanup_job_dir(root: Path) -> None:
     if root.is_dir():
         shutil.rmtree(root, ignore_errors=True)
-
-
-def _write_provider_metadata_to_document_manifest(
-    *,
-    output_dir: Path,
-    provider: str,
-    model: str,
-) -> dict:
-    manifest_path = output_dir / "document_manifest.json"
-    doc = read_document_manifest(output_dir)
-    doc["provider"] = provider
-    doc["model"] = model
-    doc["provider_model"] = provider_model_dir_name(provider, model)
-    manifest_path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
-    return doc
 
 
 def _http_load_field_grounding_manifest(output_dir: Path) -> dict[str, Any]:
@@ -158,6 +145,35 @@ def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_p
             ),
         )
     return prov, model
+
+
+@router.post(
+    "/user-uploads/process-once",
+    response_model=ProcessUserUploadsResponse,
+    summary="Scan FORMIQO_USER_UPLOADS_DIR for PDFs and run pipeline router (OCR vs AcroForm)",
+    responses={
+        200: {"description": "Batch summary per PDF processed from the inbox"},
+    },
+)
+async def process_user_uploads_once(settings: Settings = Depends(get_settings)) -> ProcessUserUploadsResponse:
+    raw = await asyncio.to_thread(scan_and_process_user_uploads, settings=settings)
+    items: list[UserUploadProcessItem] = []
+    for r in raw:
+        detail = r.get("detail")
+        if detail is not None and not isinstance(detail, dict):
+            detail = {"note": str(detail)}
+        items.append(
+            UserUploadProcessItem(
+                source=r["source"],
+                ok=r["ok"],
+                job_id=r.get("job_id"),
+                detected_pdf_type=r.get("detected_pdf_type"),
+                pipeline=r.get("pipeline"),
+                error=r.get("error"),
+                detail=detail if isinstance(detail, dict) else None,
+            )
+        )
+    return ProcessUserUploadsResponse(processed=items)
 
 
 @router.post(
@@ -315,34 +331,35 @@ async def _convert_and_ground_for_provider(
     try:
         await _save_upload_limited(file, input_pdf, max_bytes=settings.max_upload_bytes)
 
-        with input_pdf.open("rb") as handle:
-            header = handle.read(5)
-        if header != b"%PDF-":
-            raise HTTPException(status_code=400, detail="File does not look like a PDF (missing %PDF- header).")
-
         try:
-            convert_result = await asyncio.to_thread(
-                run_convert_pdf_to_images,
-                str(input_pdf),
-                str(output_dir),
-                dpi,
-                overwrite=True,
-                allow_rotated_pages=allow_rotated_pages,
+            cg = await asyncio.to_thread(
+                run_convert_and_ground_sync,
                 job_id=job_id,
+                input_pdf=input_pdf,
+                output_dir=output_dir,
+                dpi=dpi,
+                allow_rotated_pages=allow_rotated_pages,
+                provider=provider,
+                model=model,
+                settings=settings,
+                source_filename=filename,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except FileExistsError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except RuntimeError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": str(exc),
+                    "job_id": job_id,
+                },
+            ) from exc
 
-        doc = _write_provider_metadata_to_document_manifest(
-            output_dir=output_dir,
-            provider=provider,
-            model=model,
-        )
-        page_count = len(convert_result.get("pages", []))
+        doc = cg["document_manifest"]
+        page_count = cg["page_count"]
+        ground_result = cg["ground_result"]
         convert_payload = ConvertResponse(
             job_id=job_id,
             page_count=page_count,
@@ -352,40 +369,7 @@ async def _convert_and_ground_for_provider(
             document_manifest=doc,
         )
 
-        try:
-            ground_result = await asyncio.to_thread(
-                run_field_grounding_for_job,
-                job_id=job_id,
-                output_dir=output_dir,
-                provider=provider,
-                model=model,
-                openai_api_key=settings.openai_api_key,
-                openai_timeout_seconds=settings.openai_timeout_seconds,
-                openai_max_output_tokens=settings.grounding_openai_max_output_tokens,
-                anthropic_api_key=settings.anthropic_api_key,
-                anthropic_timeout_seconds=settings.anthropic_timeout_seconds,
-                anthropic_max_tokens=settings.grounding_anthropic_max_tokens,
-            )
-        except (FileNotFoundError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
         grounding_payload = GroundFieldsResponse(**ground_result)
-        if ground_result["succeeded_count"] == 0:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "message": "Convert succeeded but grounding failed for all pages.",
-                    "job_id": job_id,
-                    "convert": convert_payload.model_dump(),
-                    "grounding": {
-                        "provider": provider,
-                        "model": model,
-                        "page_count": ground_result["page_count"],
-                        "failed_count": ground_result["failed_count"],
-                        "pages": ground_result["pages"],
-                    },
-                },
-            )
 
         LOG.info(
             "Convert+ground provider=%s model=%s job=%s pages=%d file=%s",

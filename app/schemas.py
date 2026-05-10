@@ -179,3 +179,17 @@ class RefineGroundingResponse(BaseModel):
     final_preview_dir: str
     canonical_grounding_updated: bool
     iterations: list[list[RefineGroundingIterationPage]]
+
+
+class UserUploadProcessItem(BaseModel):
+    source: str
+    ok: bool
+    job_id: str | None = None
+    detected_pdf_type: str | None = None
+    pipeline: str | None = None
+    error: str | None = None
+    detail: dict[str, Any] | None = None
+
+
+class ProcessUserUploadsResponse(BaseModel):
+    processed: list[UserUploadProcessItem]

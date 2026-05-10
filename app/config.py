@@ -22,6 +22,10 @@ class Settings(BaseSettings):
         default=Path("./data/jobs"),
         description="Directory where per-job workspaces are created.",
     )
+    user_uploads_dir: Path = Field(
+        default=Path("./data/user-uploads"),
+        description="Drop folder for PDFs processed by the pipeline router (CLI / process-once API).",
+    )
     max_upload_bytes: int = Field(
         default=50 * 1024 * 1024,
         ge=1024,

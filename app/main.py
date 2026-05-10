@@ -19,6 +19,10 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     settings.jobs_dir.mkdir(parents=True, exist_ok=True)
     LOG.info("Jobs directory ready at %s", settings.jobs_dir.resolve())
+    settings.user_uploads_dir.mkdir(parents=True, exist_ok=True)
+    (settings.user_uploads_dir / "processed").mkdir(parents=True, exist_ok=True)
+    (settings.user_uploads_dir / "failed").mkdir(parents=True, exist_ok=True)
+    LOG.info("User uploads directory ready at %s", settings.user_uploads_dir.resolve())
     yield
 
 
