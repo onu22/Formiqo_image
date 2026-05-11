@@ -10,3 +10,4 @@ class PdfPipelineKind(str, Enum):
 
     ACROFORM = "acroform"
     OCR = "ocr"
+    XFA = "xfa"

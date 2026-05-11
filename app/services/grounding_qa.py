@@ -149,6 +149,14 @@ def seed_refined_from_canonical(*, grounding_dir: Path, refined_dir: Path) -> No
         shutil.copy2(src, refined_dir / src.name)
 
 
+def _sync_refined_json_to_canonical(*, refined_dir: Path, grounding_dir: Path) -> None:
+    paths = sorted(refined_dir.glob("page_*.fields.json"))
+    if not paths:
+        raise FileNotFoundError(f"No page_*.fields.json under {refined_dir}")
+    for src in paths:
+        shutil.copy2(src, grounding_dir / src.name)
+
+
 def eligible_field_ids_for_page(fields: list[Any], values: dict[str, str]) -> set[str]:
     eligible: set[str] = set()
     if not isinstance(fields, list):
@@ -733,8 +741,6 @@ def run_grounding_qa_refinement_loop(
 
         if all_acceptable:
             stopped_reason = "acceptable"
-            for src in sorted(refined_dir.glob("page_*.fields.json")):
-                shutil.copy2(src, grounding_dir / src.name)
             promoted = True
             break
 
@@ -752,6 +758,13 @@ def run_grounding_qa_refinement_loop(
             _validate_stored_page_json(payload, page_index=int(payload["page_index"]), width=w, height=h)
             _save_json(refined_path, payload)
             LOG.debug("QA apply %s: %s", refined_path.name, summary)
+
+    _sync_refined_json_to_canonical(refined_dir=refined_dir, grounding_dir=grounding_dir)
+    LOG.info(
+        "QA refined grounding synced to canonical (promoted=%s stopped_reason=%s)",
+        promoted,
+        stopped_reason,
+    )
 
     final_preview_dir = output_dir / "stamped_images" / "qa_refinement" / session_id / "final"
     stamp_qa_preview_pages(
@@ -779,6 +792,6 @@ def run_grounding_qa_refinement_loop(
         "refined_dir": refined_rel,
         "qa_session_dir": qa_rel,
         "final_preview_dir": final_preview_rel,
-        "canonical_grounding_updated": promoted,
+        "canonical_grounding_updated": True,
         "iterations": iterations_log,
     }

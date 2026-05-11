@@ -86,7 +86,7 @@ class Settings(BaseSettings):
         description='Default OpenAI model when POST /convert-and-ground JSON omits "model" for provider openai.',
     )
     grounding_qa_max_iterations: int = Field(
-        default=3,
+        default=6,
         ge=1,
         le=10,
         description="Max stamp→QA→apply rounds for /refine-grounding.",

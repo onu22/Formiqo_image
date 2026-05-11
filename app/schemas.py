@@ -171,13 +171,20 @@ class RefineGroundingResponse(BaseModel):
     provider: str
     model: str
     session_id: str
-    promoted: bool
+    promoted: bool = Field(
+        description="True when QA stopped because every page was acceptable.",
+    )
     stopped_reason: str
     iterations_run: int
     refined_dir: str
     qa_session_dir: str
     final_preview_dir: str
-    canonical_grounding_updated: bool
+    canonical_grounding_updated: bool = Field(
+        description=(
+            "True after this run: canonical field_grounding/page_*.fields.json were overwritten "
+            "from refined/ so stamping matches the last QA iteration."
+        ),
+    )
     iterations: list[list[RefineGroundingIterationPage]]
 
 
