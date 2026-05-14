@@ -19,6 +19,7 @@ from app.schemas import (
     ConvertResponse,
     ConvertAndGroundRequest,
     ConvertAndGroundResponse,
+    GroundFieldsRequest,
     GroundFieldsResponse,
     ProcessUserUploadsResponse,
     RefineGroundingIterationPage,
@@ -29,7 +30,11 @@ from app.schemas import (
     StampPdfResponse,
     StampingJson,
 )
-from app.services.convert_and_ground_job import run_convert_and_ground_sync
+from app.services.convert_and_ground_job import (
+    run_convert_and_ground_sync,
+    run_convert_sync,
+    run_ground_sync,
+)
 from app.services.pdf_pipeline import scan_and_process_user_uploads
 from app.services.grounding_qa import run_grounding_qa_refinement_loop
 from app.services.image_stamping import _assert_grounding_run_matches, run_image_stamping_for_job
@@ -103,6 +108,25 @@ def _http_load_stamping_json(output_dir: Path) -> StampingJson:
 _CONVERT_AND_GROUND_REQUEST_DEFAULT = '{"provider":"anthropic","model":"claude-opus-4-7"}'
 
 
+def _resolve_vision_grounding_model(*, provider: str, model: str | None, settings: Settings) -> tuple[str, str]:
+    """Apply server defaults when ``model`` is empty; return ``(provider, model)``."""
+    prov = provider.strip().lower()
+    raw_model = model.strip() if model else ""
+    if raw_model:
+        return prov, raw_model
+    if prov == "anthropic":
+        resolved = settings.combined_default_anthropic_model.strip()
+    else:
+        resolved = settings.combined_default_openai_model.strip()
+    if not resolved:
+        raise HTTPException(
+            status_code=400,
+            detail="Resolved model is empty; set `model` in the request JSON or configure "
+            "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL / FORMIQO_COMBINED_DEFAULT_OPENAI_MODEL.",
+        )
+    return prov, resolved
+
+
 def _parse_convert_and_ground_options(request_json: str, settings: Settings) -> tuple[str, str]:
     """Parse multipart ``request`` field; return ``(provider, model)`` with server defaults applied."""
     try:
@@ -113,21 +137,7 @@ def _parse_convert_and_ground_options(request_json: str, settings: Settings) -> 
             detail={"message": "Invalid convert-and-ground request JSON", "errors": exc.errors()},
         ) from exc
 
-    provider = body.provider.strip().lower()
-    raw_model = body.model.strip() if body.model else ""
-    if raw_model:
-        return provider, raw_model
-    if provider == "anthropic":
-        resolved = settings.combined_default_anthropic_model.strip()
-    else:
-        resolved = settings.combined_default_openai_model.strip()
-    if not resolved:
-        raise HTTPException(
-            status_code=400,
-            detail="Resolved model is empty; set `model` in the request JSON or configure "
-            "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL / FORMIQO_COMBINED_DEFAULT_OPENAI_MODEL.",
-        )
-    return provider, resolved
+    return _resolve_vision_grounding_model(provider=body.provider, model=body.model, settings=settings)
 
 
 def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_provider: str) -> tuple[str, str]:
@@ -273,6 +283,80 @@ async def refine_grounding_for_job(
 
 
 @router.post(
+    "/convert",
+    response_model=ConvertResponse,
+    summary="Upload PDF and convert to page images + manifests (no vision grounding)",
+    responses={
+        400: {"description": "Invalid PDF upload or parameters"},
+        409: {"description": "Output path already exists"},
+        413: {"description": "Upload too large"},
+        422: {"description": "Raster conversion failed"},
+    },
+)
+async def convert_pdf(
+    file: UploadFile = File(..., description="Input PDF"),
+    dpi: float = Form(200.0, ge=1.0, le=1200.0, description="Rasterization DPI"),
+    allow_rotated_pages: bool = Form(
+        False,
+        description="If true, allow non-zero page.rotation (see manifest mapping.status).",
+    ),
+    settings: Settings = Depends(get_settings),
+) -> ConvertResponse:
+    filename = file.filename or ""
+    if not filename.lower().endswith(".pdf"):
+        await file.close()
+        raise HTTPException(status_code=400, detail="Upload filename must end with .pdf")
+
+    job_id = str(uuid.uuid4())
+    root, input_pdf, output_dir = job_paths(settings.jobs_dir, job_id)
+    root.mkdir(parents=True, exist_ok=True)
+
+    try:
+        await _save_upload_limited(file, input_pdf, max_bytes=settings.max_upload_bytes)
+
+        try:
+            conv = await asyncio.to_thread(
+                run_convert_sync,
+                job_id=job_id,
+                input_pdf=input_pdf,
+                output_dir=output_dir,
+                dpi=dpi,
+                allow_rotated_pages=allow_rotated_pages,
+                source_filename=filename,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": str(exc),
+                    "job_id": job_id,
+                },
+            ) from exc
+
+        doc = conv["document_manifest"]
+        page_count = conv["page_count"]
+        LOG.info("Convert-only job=%s pages=%d file=%s", job_id, page_count, filename)
+        return ConvertResponse(
+            job_id=job_id,
+            page_count=page_count,
+            dpi=dpi,
+            allow_rotated_pages=allow_rotated_pages,
+            source_filename=filename,
+            document_manifest=doc,
+        )
+    except HTTPException:
+        _cleanup_job_dir(root)
+        raise
+    except Exception:
+        _cleanup_job_dir(root)
+        raise
+
+
+@router.post(
     "/convert-and-ground",
     response_model=ConvertAndGroundResponse,
     summary="Upload PDF, convert to images, then field-ground (provider + model via JSON form field)",
@@ -390,6 +474,58 @@ async def _convert_and_ground_for_provider(
     except Exception:
         _cleanup_job_dir(root)
         raise
+
+
+@router.post(
+    "/jobs/{job_id}/ground-fields",
+    response_model=GroundFieldsResponse,
+    summary="Run vision field grounding on a job after POST /convert (provider + model in JSON body)",
+    responses={
+        400: {"description": "Invalid job, missing conversion output, or bad request body"},
+        404: {"description": "Job not found"},
+        422: {"description": "Grounding failed for every page"},
+    },
+)
+async def ground_fields_for_job(
+    job_id: str,
+    body: GroundFieldsRequest = Body(default_factory=GroundFieldsRequest),
+    settings: Settings = Depends(get_settings),
+) -> GroundFieldsResponse:
+    try:
+        root, _, output_dir = job_paths(settings.jobs_dir, job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not output_dir.is_dir():
+        raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
+
+    provider, model = _resolve_vision_grounding_model(provider=body.provider, model=body.model, settings=settings)
+
+    try:
+        raw = await asyncio.to_thread(
+            run_ground_sync,
+            job_id=job_id,
+            output_dir=output_dir,
+            provider=provider,
+            model=model,
+            settings=settings,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": str(exc),
+                "job_id": job_id,
+            },
+        ) from exc
+
+    return GroundFieldsResponse(**raw["ground_result"])
 
 
 @router.post(

@@ -79,11 +79,17 @@ class Settings(BaseSettings):
     )
     combined_default_anthropic_model: str = Field(
         default="claude-opus-4-7",
-        description='Default Anthropic model when POST /convert-and-ground JSON omits "model" for provider anthropic.',
+        description=(
+            'Default Anthropic model when grounding JSON omits "model" for provider anthropic '
+            "(POST /convert-and-ground ``request`` field or POST /jobs/{job_id}/ground-fields body)."
+        ),
     )
     combined_default_openai_model: str = Field(
         default="gpt-5.5",
-        description='Default OpenAI model when POST /convert-and-ground JSON omits "model" for provider openai.',
+        description=(
+            'Default OpenAI model when grounding JSON omits "model" for provider openai '
+            "(POST /convert-and-ground ``request`` field or POST /jobs/{job_id}/ground-fields body)."
+        ),
     )
     grounding_qa_max_iterations: int = Field(
         default=6,

@@ -48,14 +48,22 @@ class GroundFieldsResponse(BaseModel):
     pages: list[GroundFieldsPageResult]
 
 
-class ConvertAndGroundRequest(BaseModel):
-    """JSON payload for the multipart ``request`` field on ``POST /convert-and-ground``."""
+class VisionGroundingOptions(BaseModel):
+    """Provider and vision model for field grounding (shared by convert-and-ground and ground-fields)."""
 
     provider: Literal["openai", "anthropic"] = "anthropic"
     model: str | None = Field(
         default=None,
         description="Vision model id; omit or null to use server default for the chosen provider.",
     )
+
+
+class ConvertAndGroundRequest(VisionGroundingOptions):
+    """JSON payload for the multipart ``request`` field on ``POST /convert-and-ground``."""
+
+
+class GroundFieldsRequest(VisionGroundingOptions):
+    """JSON body for ``POST /jobs/{job_id}/ground-fields``."""
 
 
 class ConvertAndGroundResponse(BaseModel):
