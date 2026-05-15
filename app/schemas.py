@@ -24,6 +24,101 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+class FormLineDetectorConfig(BaseModel):
+    """Optional overrides for ``POST /jobs/{job_id}/detect-form-lines`` request body ``config``."""
+
+    min_horizontal_length_px: int = Field(default=45, ge=1)
+    min_vertical_length_px: int = Field(default=45, ge=1)
+    max_horizontal_thickness_px: int = Field(default=12, ge=1)
+    max_vertical_thickness_px: int = Field(default=12, ge=1)
+    horizontal_kernel_divisor: int = Field(default=35, ge=1)
+    vertical_kernel_divisor: int = Field(default=35, ge=1)
+
+    def to_detector_dict(self) -> dict[str, int]:
+        return {
+            "min_horizontal_length_px": self.min_horizontal_length_px,
+            "min_vertical_length_px": self.min_vertical_length_px,
+            "max_horizontal_thickness_px": self.max_horizontal_thickness_px,
+            "max_vertical_thickness_px": self.max_vertical_thickness_px,
+            "horizontal_kernel_divisor": self.horizontal_kernel_divisor,
+            "vertical_kernel_divisor": self.vertical_kernel_divisor,
+        }
+
+
+class FormLineDetectionImageInfo(BaseModel):
+    path: str
+    width: int
+    height: int
+    unit: Literal["px"] = "px"
+    origin: Literal["top-left"] = "top-left"
+
+
+class FormLineDetectionDetectorInfo(BaseModel):
+    method: Literal["opencv_morphology"] = "opencv_morphology"
+    config: dict[str, int]
+
+
+class FormLineDetectionCounts(BaseModel):
+    horizontal: int
+    vertical: int
+    total: int
+
+
+class LineBBox(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+class FormLineRecord(BaseModel):
+    orientation: Literal["horizontal", "vertical"]
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    bbox: LineBBox
+    thickness: int
+
+
+class FormLineDetectionResponse(BaseModel):
+    """OpenCV morphology line detection result (same shape as written JSON)."""
+
+    image: FormLineDetectionImageInfo
+    detector: FormLineDetectionDetectorInfo
+    counts: FormLineDetectionCounts
+    lines: list[FormLineRecord]
+    output_files: dict[str, str] | None = Field(
+        default=None,
+        description="When written under a job, relative paths for json and highlight PNG.",
+    )
+
+
+class FormLineDetectionPageResult(BaseModel):
+    """One page within a job-wide line detection run."""
+
+    page_index: int = Field(description="0-based page index.")
+    detection: FormLineDetectionResponse
+
+
+class DetectFormLinesJobRequest(BaseModel):
+    """Optional JSON body for ``POST /jobs/{job_id}/detect-form-lines``."""
+
+    model_config = {"extra": "ignore"}
+    config: FormLineDetectorConfig | None = Field(
+        default=None,
+        description="Detector settings; omit or null for defaults.",
+    )
+
+
+class FormLineDetectionJobResponse(BaseModel):
+    """Line detection for every converted page in a job."""
+
+    job_id: str
+    page_count: int
+    pages: list[FormLineDetectionPageResult]
+
+
 class GroundFieldsPageResult(BaseModel):
     page_index: int
     image_path: str

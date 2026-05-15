@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.dependencies import get_settings
-from app.routers import convert
+from app.routers import convert, line_detection
 
 LOG = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
         )
 
     application.include_router(convert.router, prefix="/api/v1")
+    application.include_router(line_detection.router, prefix="/api/v1")
 
     @application.get("/", include_in_schema=False)
     def root() -> dict[str, str]:
