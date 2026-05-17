@@ -11,6 +11,7 @@ from app.schemas import (
     FormLineDetectionPageResult,
     FormLineDetectionResponse,
 )
+from app.services.jobs import to_output_relative_path
 from app.services.line_detector import compute_raw_line_detection, write_raw_line_detection
 
 LOG = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ def list_converted_page_pngs(output_dir: Path) -> list[tuple[int, Path]]:
 
 def write_line_detection_for_page(
     *,
+    output_dir: Path,
     in_path: Path,
     line_detection_page_dir: Path,
     detector_config: dict[str, int],
@@ -47,7 +49,12 @@ def write_line_detection_for_page(
     raw_json = line_detection_page_dir / "detected_lines.json"
     raw_png = line_detection_page_dir / "lines_highlighted.png"
 
-    raw, bgr = compute_raw_line_detection(str(in_path), detector_config)
+    image_rel = to_output_relative_path(output_dir, in_path)
+    raw, bgr = compute_raw_line_detection(
+        str(in_path),
+        detector_config,
+        image_path_in_json=image_rel,
+    )
     write_raw_line_detection(raw, bgr, str(raw_json), str(raw_png))
     return raw
 
@@ -74,6 +81,7 @@ def run_detect_form_lines_for_job_output_dir(
         stem = f"page_{page_index + 1:04d}"
         out_dir = output_dir / "line_detection" / stem
         raw = write_line_detection_for_page(
+            output_dir=output_dir,
             in_path=in_path,
             line_detection_page_dir=out_dir,
             detector_config=detector_config,

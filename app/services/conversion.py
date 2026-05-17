@@ -28,6 +28,7 @@ def run_convert_pdf_to_images(
     overwrite: bool,
     allow_rotated_pages: bool,
     job_id: str | None = None,
+    source_pdf_record: str | None = None,
 ) -> dict[str, Any]:
     """Synchronous wrapper used from ``asyncio.to_thread``."""
     conv = get_converter_module()
@@ -38,4 +39,5 @@ def run_convert_pdf_to_images(
         overwrite=overwrite,
         allow_rotated_pages=allow_rotated_pages,
         job_id=job_id,
+        source_pdf_record=source_pdf_record,
     )

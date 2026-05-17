@@ -33,8 +33,8 @@ def create_app() -> FastAPI:
         version=settings.api_version,
         lifespan=lifespan,
         description=(
-            "Upload a PDF to produce per-page PNGs plus JSON manifests with exact "
-            "image↔PDF coordinate mapping. OpenAPI / Swagger UI is served at `/docs`."
+            "Rasterize PDFs, detect form lines with OpenCV, and optionally stamp values "
+            "onto images or PDFs when field_grounding data exists. OpenAPI at `/docs`."
         ),
     )
 

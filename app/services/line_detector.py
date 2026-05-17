@@ -12,10 +12,6 @@ DEFAULT_CONFIG: dict[str, int] = {
     "max_vertical_thickness_px": 12,
     "horizontal_kernel_divisor": 35,
     "vertical_kernel_divisor": 35,
-    "min_dotted_horizontal_length_px": 80,
-    "max_dotted_line_thickness_px": 8,
-    "dotted_horizontal_connect_width_px": 18,
-    "dotted_horizontal_close_iterations": 2,
 }
 
 _CONFIG_KEYS = frozenset(DEFAULT_CONFIG.keys())
@@ -38,44 +34,6 @@ def _merge_config(config: dict[str, Any] | None) -> dict[str, int]:
     return out
 
 
-def _x_interval_overlap_ratio(x1_a: int, x2_a: int, x1_b: int, x2_b: int) -> float:
-    """Overlap length divided by the shorter span; 0 if disjoint."""
-    left = max(x1_a, x1_b)
-    right = min(x2_a, x2_b)
-    if right <= left:
-        return 0.0
-    overlap = right - left
-    span_a = max(1, x2_a - x1_a)
-    span_b = max(1, x2_b - x1_b)
-    return overlap / min(span_a, span_b)
-
-
-def _filter_dotted_overlapping_solid(
-    dotted_lines: list[dict[str, Any]],
-    solid_horizontal_lines: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Drop dotted candidates that substantially overlap a solid horizontal line."""
-    if not solid_horizontal_lines:
-        return dotted_lines
-
-    kept: list[dict[str, Any]] = []
-    for dotted in dotted_lines:
-        y_mid_d = dotted["y1"]
-        thickness_d = dotted["thickness"]
-        overlaps_solid = False
-        for solid in solid_horizontal_lines:
-            y_mid_s = solid["y1"]
-            thickness_s = solid["thickness"]
-            if abs(y_mid_d - y_mid_s) > max(thickness_d, thickness_s) + 2:
-                continue
-            if _x_interval_overlap_ratio(dotted["x1"], dotted["x2"], solid["x1"], solid["x2"]) >= 0.5:
-                overlaps_solid = True
-                break
-        if not overlaps_solid:
-            kept.append(dotted)
-    return kept
-
-
 def _contours_to_horizontal_lines(
     contours: list[Any],
     *,
@@ -93,7 +51,6 @@ def _contours_to_horizontal_lines(
         lines.append(
             {
                 "orientation": "horizontal",
-                "line_style": "solid",
                 "x1": int(x),
                 "y1": int(y_mid),
                 "x2": int(x + w),
@@ -122,7 +79,6 @@ def _contours_to_vertical_lines(
         lines.append(
             {
                 "orientation": "vertical",
-                "line_style": "solid",
                 "x1": int(x_mid),
                 "y1": int(y),
                 "x2": int(x_mid),
@@ -134,76 +90,20 @@ def _contours_to_vertical_lines(
     return lines
 
 
-def _detect_dotted_horizontal_lines(binary: Any, cfg: dict[str, int]) -> list[dict[str, Any]]:
-    """
-    Detect dotted/dashed horizontal lines on THRESH_BINARY_INV image (ink = white).
-
-    Uses a small horizontal open to keep dashes, then horizontal close to bridge gaps.
-    """
-    import cv2  # noqa: PLC0415
-
-    min_length = cfg["min_dotted_horizontal_length_px"]
-    max_thickness = cfg["max_dotted_line_thickness_px"]
-    connect_width = cfg["dotted_horizontal_connect_width_px"]
-    close_iterations = cfg["dotted_horizontal_close_iterations"]
-
-    small_horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1))
-    dotted_seed = cv2.morphologyEx(binary, cv2.MORPH_OPEN, small_horizontal_kernel, iterations=1)
-
-    connect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (connect_width, 1))
-    dotted_connected = cv2.morphologyEx(
-        dotted_seed,
-        cv2.MORPH_CLOSE,
-        connect_kernel,
-        iterations=close_iterations,
-    )
-    dotted_connected = cv2.dilate(
-        dotted_connected,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1)),
-        iterations=1,
-    )
-
-    contours, _ = cv2.findContours(dotted_connected, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    dotted_lines: list[dict[str, Any]] = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        if w < min_length or h > max_thickness or h < 1:
-            continue
-        y_mid = y + h // 2
-        dotted_lines.append(
-            {
-                "orientation": "horizontal",
-                "line_style": "dotted_or_dashed",
-                "x1": int(x),
-                "y1": int(y_mid),
-                "x2": int(x + w),
-                "y2": int(y_mid),
-                "bbox": {"x": int(x), "y": int(y), "w": int(w), "h": int(h)},
-                "thickness": int(h),
-            }
-        )
-    return dotted_lines
-
-
 def _draw_debug_overlay(
     bgr: Any,
-    solid_horizontal_lines: list[dict[str, Any]],
-    dotted_horizontal_lines: list[dict[str, Any]],
+    horizontal_lines: list[dict[str, Any]],
     vertical_lines: list[dict[str, Any]],
 ) -> Any:
-    """Draw centerlines: red = solid horizontal, green = dotted, blue = vertical (BGR)."""
+    """Draw centerlines: red = horizontal, blue = vertical (BGR). Thickness 2."""
     import cv2  # noqa: PLC0415
 
     out = bgr.copy()
     red = (0, 0, 255)
-    green = (0, 255, 0)
     blue = (255, 0, 0)
     thick = 2
-    for ln in solid_horizontal_lines:
+    for ln in horizontal_lines:
         cv2.line(out, (ln["x1"], ln["y1"]), (ln["x2"], ln["y2"]), red, thick, lineType=cv2.LINE_AA)
-    for ln in dotted_horizontal_lines:
-        cv2.line(out, (ln["x1"], ln["y1"]), (ln["x2"], ln["y2"]), green, thick, lineType=cv2.LINE_AA)
     for ln in vertical_lines:
         cv2.line(out, (ln["x1"], ln["y1"]), (ln["x2"], ln["y2"]), blue, thick, lineType=cv2.LINE_AA)
     return out
@@ -212,6 +112,8 @@ def _draw_debug_overlay(
 def compute_raw_line_detection(
     input_image_path: str,
     config: dict[str, Any] | None = None,
+    *,
+    image_path_in_json: str | None = None,
 ) -> tuple[dict[str, Any], Any]:
     """
     Run morphology line detection without writing files.
@@ -268,11 +170,8 @@ def compute_raw_line_detection(
         max_thickness=cfg["max_vertical_thickness_px"],
     )
 
-    dotted_h_lines = _detect_dotted_horizontal_lines(binary, cfg)
-    dotted_h_lines = _filter_dotted_overlapping_solid(dotted_h_lines, h_lines)
-
-    lines = [*h_lines, *v_lines, *dotted_h_lines]
-    path_str = str(in_path.resolve())
+    lines = [*h_lines, *v_lines]
+    path_str = image_path_in_json if image_path_in_json is not None else str(in_path.resolve())
 
     payload: dict[str, Any] = {
         "image": {
@@ -288,7 +187,6 @@ def compute_raw_line_detection(
         },
         "counts": {
             "horizontal": len(h_lines),
-            "horizontal_dotted": len(dotted_h_lines),
             "vertical": len(v_lines),
             "total": len(lines),
         },
@@ -298,26 +196,17 @@ def compute_raw_line_detection(
 
 
 def write_raw_line_detection(payload: dict[str, Any], bgr: Any, output_json_path: str, output_image_path: str) -> None:
-    """Persist raw detector JSON and debug overlay PNG (red/green/blue)."""
+    """Persist raw detector JSON and red/blue debug PNG."""
     import cv2  # noqa: PLC0415
     import json as _json
 
-    solid_h_lines = [
-        ln
-        for ln in payload["lines"]
-        if ln["orientation"] == "horizontal" and ln.get("line_style", "solid") == "solid"
-    ]
-    dotted_h_lines = [
-        ln
-        for ln in payload["lines"]
-        if ln["orientation"] == "horizontal" and ln.get("line_style") == "dotted_or_dashed"
-    ]
+    h_lines = [ln for ln in payload["lines"] if ln["orientation"] == "horizontal"]
     v_lines = [ln for ln in payload["lines"] if ln["orientation"] == "vertical"]
     out_img = Path(output_image_path)
     out_json = Path(output_json_path)
     out_img.parent.mkdir(parents=True, exist_ok=True)
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    overlay = _draw_debug_overlay(bgr, solid_h_lines, dotted_h_lines, v_lines)
+    overlay = _draw_debug_overlay(bgr, h_lines, v_lines)
     if not cv2.imwrite(str(out_img), overlay):
         raise OSError(f"Failed to write debug image: {output_image_path}")
     out_json.write_text(_json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -328,6 +217,8 @@ def detect_form_lines(
     output_image_path: str,
     output_json_path: str,
     config: dict[str, Any] | None = None,
+    *,
+    image_path_in_json: str | None = None,
 ) -> dict[str, Any]:
     """
     Detect horizontal and vertical form lines via morphology on OTSU-inverted binary image.
@@ -335,6 +226,10 @@ def detect_form_lines(
     Writes ``output_json_path`` (UTF-8 JSON) and ``output_image_path`` (debug overlay PNG).
     Returns the same structure as written to JSON.
     """
-    payload, bgr = compute_raw_line_detection(input_image_path, config)
+    payload, bgr = compute_raw_line_detection(
+        input_image_path,
+        config,
+        image_path_in_json=image_path_in_json,
+    )
     write_raw_line_detection(payload, bgr, output_json_path, output_image_path)
     return payload

@@ -7,19 +7,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-class ConvertResponse(BaseModel):
-    """Result of a successful PDF conversion."""
-
-    job_id: str
-    page_count: int
-    dpi: float
-    allow_rotated_pages: bool
-    source_filename: str
-    document_manifest: dict[str, Any] = Field(
-        description="Parsed contents of output/document_manifest.json",
-    )
-
-
 class ErrorResponse(BaseModel):
     detail: str
 
@@ -33,10 +20,6 @@ class FormLineDetectorConfig(BaseModel):
     max_vertical_thickness_px: int = Field(default=12, ge=1)
     horizontal_kernel_divisor: int = Field(default=35, ge=1)
     vertical_kernel_divisor: int = Field(default=35, ge=1)
-    min_dotted_horizontal_length_px: int = Field(default=80, ge=1)
-    max_dotted_line_thickness_px: int = Field(default=8, ge=1)
-    dotted_horizontal_connect_width_px: int = Field(default=18, ge=1)
-    dotted_horizontal_close_iterations: int = Field(default=2, ge=1)
 
     def to_detector_dict(self) -> dict[str, int]:
         return {
@@ -46,15 +29,13 @@ class FormLineDetectorConfig(BaseModel):
             "max_vertical_thickness_px": self.max_vertical_thickness_px,
             "horizontal_kernel_divisor": self.horizontal_kernel_divisor,
             "vertical_kernel_divisor": self.vertical_kernel_divisor,
-            "min_dotted_horizontal_length_px": self.min_dotted_horizontal_length_px,
-            "max_dotted_line_thickness_px": self.max_dotted_line_thickness_px,
-            "dotted_horizontal_connect_width_px": self.dotted_horizontal_connect_width_px,
-            "dotted_horizontal_close_iterations": self.dotted_horizontal_close_iterations,
         }
 
 
 class FormLineDetectionImageInfo(BaseModel):
-    path: str
+    path: str = Field(
+        description="Path to the source page image, relative to the job output directory (e.g. converted_images/page_0001.png).",
+    )
     width: int
     height: int
     unit: Literal["px"] = "px"
@@ -68,7 +49,6 @@ class FormLineDetectionDetectorInfo(BaseModel):
 
 class FormLineDetectionCounts(BaseModel):
     horizontal: int
-    horizontal_dotted: int = 0
     vertical: int
     total: int
 
@@ -82,7 +62,6 @@ class LineBBox(BaseModel):
 
 class FormLineRecord(BaseModel):
     orientation: Literal["horizontal", "vertical"]
-    line_style: Literal["solid", "dotted_or_dashed"] = "solid"
     x1: int
     y1: int
     x2: int
@@ -127,54 +106,6 @@ class FormLineDetectionJobResponse(BaseModel):
     job_id: str
     page_count: int
     pages: list[FormLineDetectionPageResult]
-
-
-class GroundFieldsPageResult(BaseModel):
-    page_index: int
-    image_path: str
-    status: str
-    resolution: str | None = None
-    output_file: str | None = None
-    error: str | None = None
-
-
-class GroundFieldsResponse(BaseModel):
-    job_id: str
-    provider: str
-    model: str
-    run_id: str
-    run_dir: str
-    page_count: int
-    succeeded_count: int
-    failed_count: int
-    output_dir: str
-    manifest_path: str
-    stamping_sample_path: str | None = None
-    pages: list[GroundFieldsPageResult]
-
-
-class VisionGroundingOptions(BaseModel):
-    """Provider and vision model for field grounding (shared by convert-and-ground and ground-fields)."""
-
-    provider: Literal["openai", "anthropic"] = "anthropic"
-    model: str | None = Field(
-        default=None,
-        description="Vision model id; omit or null to use server default for the chosen provider.",
-    )
-
-
-class ConvertAndGroundRequest(VisionGroundingOptions):
-    """JSON payload for the multipart ``request`` field on ``POST /convert-and-ground``."""
-
-
-class GroundFieldsRequest(VisionGroundingOptions):
-    """JSON body for ``POST /jobs/{job_id}/ground-fields``."""
-
-
-class ConvertAndGroundResponse(BaseModel):
-    job_id: str
-    convert: ConvertResponse
-    grounding: GroundFieldsResponse
 
 
 class StampProviderRequest(BaseModel):
@@ -269,50 +200,6 @@ class StampPdfResponse(BaseModel):
     succeeded_count: int
     failed_count: int
     pages: list[StampPdfPageResult]
-
-
-class RefineGroundingIterationPage(BaseModel):
-    page_index: int
-    qa_status: str
-    corrections_requested: int = 0
-    preview_image: str | None = None
-    note: str | None = None
-
-
-class RefineGroundingResponse(BaseModel):
-    job_id: str
-    provider: str
-    model: str
-    session_id: str
-    promoted: bool = Field(
-        description="True when QA stopped because every page was acceptable.",
-    )
-    stopped_reason: str
-    iterations_run: int
-    refined_dir: str
-    qa_session_dir: str
-    final_preview_dir: str
-    canonical_grounding_updated: bool = Field(
-        description=(
-            "True after this run: canonical field_grounding/page_*.fields.json were overwritten "
-            "from refined/ so stamping matches the last QA iteration."
-        ),
-    )
-    iterations: list[list[RefineGroundingIterationPage]]
-
-
-class UserUploadProcessItem(BaseModel):
-    source: str
-    ok: bool
-    job_id: str | None = None
-    detected_pdf_type: str | None = None
-    pipeline: str | None = None
-    error: str | None = None
-    detail: dict[str, Any] | None = None
-
-
-class ProcessUserUploadsResponse(BaseModel):
-    processed: list[UserUploadProcessItem]
 
 
 class UserUploadsConvertLineDetectRequest(BaseModel):
