@@ -33,6 +33,10 @@ class FormLineDetectorConfig(BaseModel):
     max_vertical_thickness_px: int = Field(default=12, ge=1)
     horizontal_kernel_divisor: int = Field(default=35, ge=1)
     vertical_kernel_divisor: int = Field(default=35, ge=1)
+    min_dotted_horizontal_length_px: int = Field(default=80, ge=1)
+    max_dotted_line_thickness_px: int = Field(default=8, ge=1)
+    dotted_horizontal_connect_width_px: int = Field(default=18, ge=1)
+    dotted_horizontal_close_iterations: int = Field(default=2, ge=1)
 
     def to_detector_dict(self) -> dict[str, int]:
         return {
@@ -42,6 +46,10 @@ class FormLineDetectorConfig(BaseModel):
             "max_vertical_thickness_px": self.max_vertical_thickness_px,
             "horizontal_kernel_divisor": self.horizontal_kernel_divisor,
             "vertical_kernel_divisor": self.vertical_kernel_divisor,
+            "min_dotted_horizontal_length_px": self.min_dotted_horizontal_length_px,
+            "max_dotted_line_thickness_px": self.max_dotted_line_thickness_px,
+            "dotted_horizontal_connect_width_px": self.dotted_horizontal_connect_width_px,
+            "dotted_horizontal_close_iterations": self.dotted_horizontal_close_iterations,
         }
 
 
@@ -60,6 +68,7 @@ class FormLineDetectionDetectorInfo(BaseModel):
 
 class FormLineDetectionCounts(BaseModel):
     horizontal: int
+    horizontal_dotted: int = 0
     vertical: int
     total: int
 
@@ -73,6 +82,7 @@ class LineBBox(BaseModel):
 
 class FormLineRecord(BaseModel):
     orientation: Literal["horizontal", "vertical"]
+    line_style: Literal["solid", "dotted_or_dashed"] = "solid"
     x1: int
     y1: int
     x2: int
