@@ -303,3 +303,53 @@ class UserUploadProcessItem(BaseModel):
 
 class ProcessUserUploadsResponse(BaseModel):
     processed: list[UserUploadProcessItem]
+
+
+class UserUploadsConvertLineDetectRequest(BaseModel):
+    """JSON body for ``POST /user-uploads/process-convert-line-detect`` (optional)."""
+
+    model_config = {"extra": "ignore"}
+    dpi: float = Field(default=200.0, gt=0, le=600)
+    allow_rotated_pages: bool = False
+    config: FormLineDetectorConfig | None = Field(
+        default=None,
+        description="OpenCV detector overrides; omit for defaults.",
+    )
+    include_lines: bool = Field(
+        default=False,
+        description="If true, include full ``lines`` arrays per page in ``line_detection`` (can be very large).",
+    )
+
+
+class ConvertLineDetectPageSummary(BaseModel):
+    page_index: int
+    counts: FormLineDetectionCounts
+    output_files: dict[str, str] | None = None
+
+
+class ConvertLineDetectJobSummary(BaseModel):
+    job_id: str
+    page_count: int
+    pages: list[ConvertLineDetectPageSummary]
+
+
+class UserUploadConvertLineDetectItem(BaseModel):
+    source: str
+    ok: bool
+    job_id: str | None = None
+    detected_pdf_type: str | None = None
+    pipeline: str | None = None
+    page_count: int | None = None
+    dpi: float | None = None
+    allow_rotated_pages: bool | None = None
+    line_detection_summary: ConvertLineDetectJobSummary | None = None
+    line_detection: FormLineDetectionJobResponse | None = Field(
+        default=None,
+        description="Populated only when the request set ``include_lines`` to true.",
+    )
+    error: str | None = None
+    detail: dict[str, Any] | None = None
+
+
+class ProcessUserUploadsConvertLineDetectResponse(BaseModel):
+    processed: list[UserUploadConvertLineDetectItem]
