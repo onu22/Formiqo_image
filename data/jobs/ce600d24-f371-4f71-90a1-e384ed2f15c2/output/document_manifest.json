@@ -1,0 +1,19 @@
+{
+  "manifest_version": "1.0",
+  "source_pdf": "../input.pdf",
+  "dpi": 200.0,
+  "converted_images_manifest": "converted_images/manifest.json",
+  "pages": [
+    {
+      "page_index": 0,
+      "page_manifest_path": "converted_images/pages/page_0001.json",
+      "image_path": "converted_images/page_0001.png"
+    },
+    {
+      "page_index": 1,
+      "page_manifest_path": "converted_images/pages/page_0002.json",
+      "image_path": "converted_images/page_0002.png"
+    }
+  ],
+  "job_id": "ce600d24-f371-4f71-90a1-e384ed2f15c2"
+}

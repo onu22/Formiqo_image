@@ -1,0 +1,36 @@
+{
+  "manifest_version": "1.0",
+  "page_index": 0,
+  "pdf": {
+    "width_pt": 612.0,
+    "height_pt": 792.0,
+    "origin": "bottom-left"
+  },
+  "image": {
+    "path": "converted_images/page_0001.png",
+    "format": "png",
+    "width_px": 1700,
+    "height_px": 2200,
+    "origin": "top-left",
+    "rendered_image_width_px": 1700,
+    "rendered_image_height_px": 2200,
+    "saved_image_width_px": 1700,
+    "saved_image_height_px": 2200
+  },
+  "rendering": {
+    "dpi": 200.0,
+    "zoom": 2.7777777777777777,
+    "library": "pymupdf",
+    "pymupdf_version": "1.27.2.3"
+  },
+  "mapping": {
+    "image_to_pdf_scale_x": 0.36,
+    "image_to_pdf_scale_y": 0.36,
+    "formula": {
+      "pdf_x": "x * image_to_pdf_scale_x",
+      "pdf_y": "pdf_height_pt - ((y + h) * image_to_pdf_scale_y)",
+      "pdf_w": "w * image_to_pdf_scale_x",
+      "pdf_h": "h * image_to_pdf_scale_y"
+    }
+  }
+}

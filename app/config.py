@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         description="Timeout for each OpenAI request in seconds.",
     )
     grounding_openai_max_output_tokens: int = Field(
-        default=9600,
+        default=16000,
         ge=256,
         description="Max output tokens for OpenAI grounding and JSON repair calls.",
     )
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
         description="Timeout for each Anthropic grounding request in seconds.",
     )
     grounding_anthropic_max_tokens: int = Field(
-        default=4800,
+        default=16000,
         ge=256,
         description="Max output tokens for Anthropic grounding and JSON repair calls.",
     )
@@ -118,4 +118,16 @@ class Settings(BaseSettings):
         ge=0,
         le=50,
         description="Max spread (max-min) of delta components on an axis to treat as consensus.",
+    )
+    grounding_line_padding_px: int = Field(
+        default=3,
+        ge=0,
+        le=20,
+        description="Padding around detected lines for crosses_line validation and forbidden zones.",
+    )
+    grounding_stamp_inset_px: int = Field(
+        default=2,
+        ge=0,
+        le=20,
+        description="Inset applied when snapping field bboxes to cell/band interiors.",
     )

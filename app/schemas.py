@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ErrorResponse(BaseModel):
@@ -12,7 +12,7 @@ class ErrorResponse(BaseModel):
 
 
 class FormLineDetectorConfig(BaseModel):
-    """Optional overrides for ``POST /jobs/{job_id}/detect-form-lines`` request body ``config``."""
+    """Optional OpenCV overrides for ``POST /user-uploads/process-convert-line-detect`` body ``config``."""
 
     min_horizontal_length_px: int = Field(default=45, ge=1)
     min_vertical_length_px: int = Field(default=45, ge=1)
@@ -61,6 +61,8 @@ class LineBBox(BaseModel):
 
 
 class FormLineRecord(BaseModel):
+    line_id: str | None = None
+    line_style: Literal["solid"] | None = None
     orientation: Literal["horizontal", "vertical"]
     x1: int
     y1: int
@@ -88,16 +90,6 @@ class FormLineDetectionPageResult(BaseModel):
 
     page_index: int = Field(description="0-based page index.")
     detection: FormLineDetectionResponse
-
-
-class DetectFormLinesJobRequest(BaseModel):
-    """Optional JSON body for ``POST /jobs/{job_id}/detect-form-lines``."""
-
-    model_config = {"extra": "ignore"}
-    config: FormLineDetectorConfig | None = Field(
-        default=None,
-        description="Detector settings; omit or null for defaults.",
-    )
 
 
 class FormLineDetectionJobResponse(BaseModel):
@@ -250,3 +242,54 @@ class UserUploadConvertLineDetectItem(BaseModel):
 
 class ProcessUserUploadsConvertLineDetectResponse(BaseModel):
     processed: list[UserUploadConvertLineDetectItem]
+
+
+class GroundFieldsFromLinesRequest(BaseModel):
+    """JSON body for ``POST /jobs/{job_id}/ground-fields-from-lines``."""
+
+    model_config = {"extra": "ignore"}
+    provider: Literal["openai", "anthropic"] = Field(
+        default="openai",
+        description="Vision provider for field grounding.",
+    )
+    model: str | None = Field(
+        default=None,
+        description=(
+            "Vision model id; omit for defaults (openai: gpt-5.5, anthropic: claude-opus-4-7) "
+            "or env FORMIQO_GROUNDING_MODEL / FORMIQO_COMBINED_DEFAULT_*."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_provider_model_defaults(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        prov = str(data.get("provider") or "openai").strip().lower()
+        model = data.get("model")
+        if model is None or (isinstance(model, str) and not model.strip()):
+            data = dict(data)
+            data["model"] = "claude-opus-4-7" if prov == "anthropic" else "gpt-5.5"
+        return data
+
+
+class SemanticGroundingPageResult(BaseModel):
+    page_index: int
+    status: str
+    grounding_file: str | None = None
+    raw_response_file: str | None = None
+    error: str | None = None
+    detail: Any | None = None
+
+
+class GroundFieldsFromLinesResponse(BaseModel):
+    job_id: str
+    provider: str
+    model: str
+    run_dir: str
+    manifest_path: str
+    page_count: int
+    succeeded_count: int
+    failed_count: int
+    pages: list[SemanticGroundingPageResult]
+    failed_pages: list[SemanticGroundingPageResult] = Field(default_factory=list)

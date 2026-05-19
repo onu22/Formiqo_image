@@ -90,6 +90,24 @@ def _contours_to_vertical_lines(
     return lines
 
 
+def assign_line_ids(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach stable ``line_id`` (line_h_NNN / line_v_NNN) and ``line_style: solid`` to each line."""
+    horizontals = sorted(
+        (ln for ln in lines if ln.get("orientation") == "horizontal"),
+        key=lambda ln: (ln["bbox"]["y"], ln["bbox"]["x"]),
+    )
+    verticals = sorted(
+        (ln for ln in lines if ln.get("orientation") == "vertical"),
+        key=lambda ln: (ln["bbox"]["x"], ln["bbox"]["y"]),
+    )
+    out: list[dict[str, Any]] = []
+    for idx, ln in enumerate(horizontals, start=1):
+        out.append({**ln, "line_id": f"line_h_{idx:03d}", "line_style": "solid"})
+    for idx, ln in enumerate(verticals, start=1):
+        out.append({**ln, "line_id": f"line_v_{idx:03d}", "line_style": "solid"})
+    return out
+
+
 def _draw_debug_overlay(
     bgr: Any,
     horizontal_lines: list[dict[str, Any]],
@@ -170,7 +188,7 @@ def compute_raw_line_detection(
         max_thickness=cfg["max_vertical_thickness_px"],
     )
 
-    lines = [*h_lines, *v_lines]
+    lines = assign_line_ids([*h_lines, *v_lines])
     path_str = image_path_in_json if image_path_in_json is not None else str(in_path.resolve())
 
     payload: dict[str, Any] = {

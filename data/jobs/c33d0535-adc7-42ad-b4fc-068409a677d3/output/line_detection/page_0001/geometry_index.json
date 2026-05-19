@@ -1,0 +1,1277 @@
+{
+  "page_width": 1700,
+  "page_height": 2200,
+  "lines_by_id": {
+    "line_h_001": {
+      "orientation": "horizontal",
+      "x1": 369,
+      "y1": 207,
+      "x2": 772,
+      "y2": 207,
+      "bbox": {
+        "x": 369,
+        "y": 206,
+        "w": 403,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_001",
+      "line_style": "solid"
+    },
+    "line_h_002": {
+      "orientation": "horizontal",
+      "x1": 369,
+      "y1": 238,
+      "x2": 772,
+      "y2": 238,
+      "bbox": {
+        "x": 369,
+        "y": 237,
+        "w": 403,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_002",
+      "line_style": "solid"
+    },
+    "line_h_003": {
+      "orientation": "horizontal",
+      "x1": 199,
+      "y1": 342,
+      "x2": 1503,
+      "y2": 342,
+      "bbox": {
+        "x": 199,
+        "y": 341,
+        "w": 1304,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_003",
+      "line_style": "solid"
+    },
+    "line_h_004": {
+      "orientation": "horizontal",
+      "x1": 199,
+      "y1": 440,
+      "x2": 1503,
+      "y2": 440,
+      "bbox": {
+        "x": 199,
+        "y": 439,
+        "w": 1304,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_004",
+      "line_style": "solid"
+    },
+    "line_h_005": {
+      "orientation": "horizontal",
+      "x1": 199,
+      "y1": 564,
+      "x2": 1503,
+      "y2": 564,
+      "bbox": {
+        "x": 199,
+        "y": 563,
+        "w": 1304,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_005",
+      "line_style": "solid"
+    },
+    "line_h_006": {
+      "orientation": "horizontal",
+      "x1": 1069,
+      "y1": 694,
+      "x2": 1473,
+      "y2": 694,
+      "bbox": {
+        "x": 1069,
+        "y": 694,
+        "w": 404,
+        "h": 1
+      },
+      "thickness": 1,
+      "line_id": "line_h_006",
+      "line_style": "solid"
+    },
+    "line_h_007": {
+      "orientation": "horizontal",
+      "x1": 1069,
+      "y1": 726,
+      "x2": 1473,
+      "y2": 726,
+      "bbox": {
+        "x": 1069,
+        "y": 725,
+        "w": 404,
+        "h": 2
+      },
+      "thickness": 2,
+      "line_id": "line_h_007",
+      "line_style": "solid"
+    },
+    "line_v_001": {
+      "orientation": "vertical",
+      "x1": 200,
+      "y1": 340,
+      "x2": 200,
+      "y2": 568,
+      "bbox": {
+        "x": 200,
+        "y": 340,
+        "w": 1,
+        "h": 228
+      },
+      "thickness": 1,
+      "line_id": "line_v_001",
+      "line_style": "solid"
+    },
+    "line_v_002": {
+      "orientation": "vertical",
+      "x1": 850,
+      "y1": 340,
+      "x2": 850,
+      "y2": 568,
+      "bbox": {
+        "x": 849,
+        "y": 340,
+        "w": 2,
+        "h": 228
+      },
+      "thickness": 2,
+      "line_id": "line_v_002",
+      "line_style": "solid"
+    },
+    "line_v_003": {
+      "orientation": "vertical",
+      "x1": 1499,
+      "y1": 340,
+      "x2": 1499,
+      "y2": 568,
+      "bbox": {
+        "x": 1499,
+        "y": 340,
+        "w": 1,
+        "h": 228
+      },
+      "thickness": 1,
+      "line_id": "line_v_003",
+      "line_style": "solid"
+    }
+  },
+  "writable_bands": [
+    {
+      "y_min": 208,
+      "y_max": 237,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_001",
+        "line_h_002"
+      ]
+    },
+    {
+      "y_min": 239,
+      "y_max": 341,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_002",
+        "line_h_003"
+      ]
+    },
+    {
+      "y_min": 343,
+      "y_max": 439,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_003",
+        "line_h_004"
+      ]
+    },
+    {
+      "y_min": 441,
+      "y_max": 563,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_004",
+        "line_h_005"
+      ]
+    },
+    {
+      "y_min": 565,
+      "y_max": 694,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_005",
+        "line_h_006"
+      ]
+    },
+    {
+      "y_min": 695,
+      "y_max": 725,
+      "x_min": 17,
+      "x_max": 1683,
+      "between_lines": [
+        "line_h_006",
+        "line_h_007"
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "cell_index": 0,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 29
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_002",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 1,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 29
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_002",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 2,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 29
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_002",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 3,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 133
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_003",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 4,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 133
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_003",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 5,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 133
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_003",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 6,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 231
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_004",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 7,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 231
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_004",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 8,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 231
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_004",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 9,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 355
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_005",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 10,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 355
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_005",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 11,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 355
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_005",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 12,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_006",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 13,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_006",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 14,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_006",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 15,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 648,
+        "h": 517
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 16,
+      "bbox": {
+        "x": 201,
+        "y": 208,
+        "w": 1298,
+        "h": 517
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 17,
+      "bbox": {
+        "x": 851,
+        "y": 208,
+        "w": 648,
+        "h": 517
+      },
+      "bounding_lines": [
+        "line_h_001",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 18,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 648,
+        "h": 102
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_003",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 19,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 1298,
+        "h": 102
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_003",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 20,
+      "bbox": {
+        "x": 851,
+        "y": 239,
+        "w": 648,
+        "h": 102
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_003",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 21,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 648,
+        "h": 200
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_004",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 22,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 1298,
+        "h": 200
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_004",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 23,
+      "bbox": {
+        "x": 851,
+        "y": 239,
+        "w": 648,
+        "h": 200
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_004",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 24,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 648,
+        "h": 324
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_005",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 25,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 1298,
+        "h": 324
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_005",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 26,
+      "bbox": {
+        "x": 851,
+        "y": 239,
+        "w": 648,
+        "h": 324
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_005",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 27,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 648,
+        "h": 455
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_006",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 28,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 1298,
+        "h": 455
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_006",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 29,
+      "bbox": {
+        "x": 851,
+        "y": 239,
+        "w": 648,
+        "h": 455
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_006",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 30,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 648,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 31,
+      "bbox": {
+        "x": 201,
+        "y": 239,
+        "w": 1298,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 32,
+      "bbox": {
+        "x": 851,
+        "y": 239,
+        "w": 648,
+        "h": 486
+      },
+      "bounding_lines": [
+        "line_h_002",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 33,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 648,
+        "h": 96
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_004",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 34,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 1298,
+        "h": 96
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_004",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 35,
+      "bbox": {
+        "x": 851,
+        "y": 343,
+        "w": 648,
+        "h": 96
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_004",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 36,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 648,
+        "h": 220
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_005",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 37,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 1298,
+        "h": 220
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_005",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 38,
+      "bbox": {
+        "x": 851,
+        "y": 343,
+        "w": 648,
+        "h": 220
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_005",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 39,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 648,
+        "h": 351
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_006",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 40,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 1298,
+        "h": 351
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_006",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 41,
+      "bbox": {
+        "x": 851,
+        "y": 343,
+        "w": 648,
+        "h": 351
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_006",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 42,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 648,
+        "h": 382
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 43,
+      "bbox": {
+        "x": 201,
+        "y": 343,
+        "w": 1298,
+        "h": 382
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 44,
+      "bbox": {
+        "x": 851,
+        "y": 343,
+        "w": 648,
+        "h": 382
+      },
+      "bounding_lines": [
+        "line_h_003",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 45,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 648,
+        "h": 122
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_005",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 46,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 1298,
+        "h": 122
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_005",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 47,
+      "bbox": {
+        "x": 851,
+        "y": 441,
+        "w": 648,
+        "h": 122
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_005",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 48,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 648,
+        "h": 253
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_006",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 49,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 1298,
+        "h": 253
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_006",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 50,
+      "bbox": {
+        "x": 851,
+        "y": 441,
+        "w": 648,
+        "h": 253
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_006",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 51,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 648,
+        "h": 284
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 52,
+      "bbox": {
+        "x": 201,
+        "y": 441,
+        "w": 1298,
+        "h": 284
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 53,
+      "bbox": {
+        "x": 851,
+        "y": 441,
+        "w": 648,
+        "h": 284
+      },
+      "bounding_lines": [
+        "line_h_004",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 54,
+      "bbox": {
+        "x": 201,
+        "y": 565,
+        "w": 648,
+        "h": 129
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_006",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 55,
+      "bbox": {
+        "x": 201,
+        "y": 565,
+        "w": 1298,
+        "h": 129
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_006",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 56,
+      "bbox": {
+        "x": 851,
+        "y": 565,
+        "w": 648,
+        "h": 129
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_006",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 57,
+      "bbox": {
+        "x": 201,
+        "y": 565,
+        "w": 648,
+        "h": 160
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 58,
+      "bbox": {
+        "x": 201,
+        "y": 565,
+        "w": 1298,
+        "h": 160
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 59,
+      "bbox": {
+        "x": 851,
+        "y": 565,
+        "w": 648,
+        "h": 160
+      },
+      "bounding_lines": [
+        "line_h_005",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 60,
+      "bbox": {
+        "x": 201,
+        "y": 695,
+        "w": 648,
+        "h": 30
+      },
+      "bounding_lines": [
+        "line_h_006",
+        "line_h_007",
+        "line_v_001",
+        "line_v_002"
+      ]
+    },
+    {
+      "cell_index": 61,
+      "bbox": {
+        "x": 201,
+        "y": 695,
+        "w": 1298,
+        "h": 30
+      },
+      "bounding_lines": [
+        "line_h_006",
+        "line_h_007",
+        "line_v_001",
+        "line_v_003"
+      ]
+    },
+    {
+      "cell_index": 62,
+      "bbox": {
+        "x": 851,
+        "y": 695,
+        "w": 648,
+        "h": 30
+      },
+      "bounding_lines": [
+        "line_h_006",
+        "line_h_007",
+        "line_v_002",
+        "line_v_003"
+      ]
+    }
+  ],
+  "forbidden_zones": [
+    {
+      "source_line_id": "line_h_001",
+      "bbox": {
+        "x": 366,
+        "y": 203,
+        "w": 409,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_h_002",
+      "bbox": {
+        "x": 366,
+        "y": 234,
+        "w": 409,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_h_003",
+      "bbox": {
+        "x": 196,
+        "y": 338,
+        "w": 1310,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_h_004",
+      "bbox": {
+        "x": 196,
+        "y": 436,
+        "w": 1310,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_h_005",
+      "bbox": {
+        "x": 196,
+        "y": 560,
+        "w": 1310,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_h_006",
+      "bbox": {
+        "x": 1066,
+        "y": 691,
+        "w": 410,
+        "h": 7
+      }
+    },
+    {
+      "source_line_id": "line_h_007",
+      "bbox": {
+        "x": 1066,
+        "y": 722,
+        "w": 410,
+        "h": 8
+      }
+    },
+    {
+      "source_line_id": "line_v_001",
+      "bbox": {
+        "x": 197,
+        "y": 337,
+        "w": 7,
+        "h": 234
+      }
+    },
+    {
+      "source_line_id": "line_v_002",
+      "bbox": {
+        "x": 846,
+        "y": 337,
+        "w": 8,
+        "h": 234
+      }
+    },
+    {
+      "source_line_id": "line_v_003",
+      "bbox": {
+        "x": 1496,
+        "y": 337,
+        "w": 7,
+        "h": 234
+      }
+    },
+    {
+      "source_line_id": null,
+      "bbox": {
+        "x": 0,
+        "y": 0,
+        "w": 1700,
+        "h": 176
+      },
+      "kind": "header_margin"
+    }
+  ]
+}

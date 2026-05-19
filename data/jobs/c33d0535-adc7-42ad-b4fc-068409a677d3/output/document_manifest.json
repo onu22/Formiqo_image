@@ -1,0 +1,14 @@
+{
+  "manifest_version": "1.0",
+  "source_pdf": "../input.pdf",
+  "dpi": 200.0,
+  "converted_images_manifest": "converted_images/manifest.json",
+  "pages": [
+    {
+      "page_index": 0,
+      "page_manifest_path": "converted_images/pages/page_0001.json",
+      "image_path": "converted_images/page_0001.png"
+    }
+  ],
+  "job_id": "c33d0535-adc7-42ad-b4fc-068409a677d3"
+}

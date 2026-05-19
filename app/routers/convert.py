@@ -84,8 +84,8 @@ def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_p
     "/user-uploads/process-convert-line-detect",
     response_model=ProcessUserUploadsConvertLineDetectResponse,
     summary=(
-        "Scan FORMIQO_USER_UPLOADS_DIR: rasterize each PDF and run OpenCV detect-form-lines "
-        "(no LLM; for batch-testing line detection)"
+        "PDF inbox → rasterize each PDF and run OpenCV line detection (primary entry; no LLM). "
+        "Use returned job_id with POST /jobs/{job_id}/ground-fields-from-lines next."
     ),
     responses={
         200: {"description": "Per-PDF summary; jobs remain under the jobs directory for inspection"},

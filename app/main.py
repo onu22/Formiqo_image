@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.dependencies import get_settings
-from app.routers import convert, line_detection
+from app.routers import convert, grounding
 
 LOG = logging.getLogger(__name__)
 
@@ -27,14 +27,20 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        )
+
     settings = get_settings()
     application = FastAPI(
         title=settings.api_title,
         version=settings.api_version,
         lifespan=lifespan,
         description=(
-            "Rasterize PDFs, detect form lines with OpenCV, and optionally stamp values "
-            "onto images or PDFs when field_grounding data exists. OpenAPI at `/docs`."
+            "Rasterize PDFs, detect form lines with OpenCV, ground fields with OpenAI using "
+            "the line map, and optionally stamp values onto images or PDFs. OpenAPI at `/docs`."
         ),
     )
 
@@ -49,7 +55,7 @@ def create_app() -> FastAPI:
         )
 
     application.include_router(convert.router, prefix="/api/v1")
-    application.include_router(line_detection.router, prefix="/api/v1")
+    application.include_router(grounding.router, prefix="/api/v1")
 
     @application.get("/", include_in_schema=False)
     def root() -> dict[str, str]:
