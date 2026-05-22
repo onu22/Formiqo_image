@@ -46,7 +46,7 @@ class Settings(BaseSettings):
         description="OpenAI model name used for per-page field grounding.",
     )
     openai_timeout_seconds: float = Field(
-        default=60.0,
+        default=120.0,
         gt=0,
         description="Timeout for each OpenAI request in seconds.",
     )
@@ -68,9 +68,13 @@ class Settings(BaseSettings):
         description="Anthropic API key used when provider=anthropic.",
     )
     anthropic_timeout_seconds: float = Field(
-        default=60.0,
+        default=120.0,
         gt=0,
         description="Timeout for each Anthropic grounding request in seconds.",
+    )
+    grounding_prompt_dir: Path = Field(
+        default=Path("./prompts"),
+        description="Directory containing grounding_system.md, grounding_developer.md, grounding_user.md.",
     )
     grounding_anthropic_max_tokens: int = Field(
         default=16000,
@@ -123,11 +127,18 @@ class Settings(BaseSettings):
         default=3,
         ge=0,
         le=20,
-        description="Padding around detected lines for crosses_line validation and forbidden zones.",
+        description="Padding around detected lines when building geometry index forbidden zones.",
     )
     grounding_stamp_inset_px: int = Field(
         default=2,
         ge=0,
         le=20,
         description="Inset applied when snapping field bboxes to cell/band interiors.",
+    )
+    grounding_slim_line_detection: bool = Field(
+        default=True,
+        description=(
+            "When true, send slim line_detection_json to the LLM (line_id, orientation, bbox only). "
+            "Full detected_lines.json remains on disk for validation."
+        ),
     )

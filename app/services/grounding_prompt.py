@@ -1,194 +1,146 @@
-"""Prompt templates for hybrid line-map semantic grounding."""
+"""Prompt templates and response adaptation for hybrid line-map semantic grounding."""
 
 from __future__ import annotations
 
 import json
+import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-FORMIQO_GROUNDING_SYSTEM_PROMPT = """You are a production-grade Document Field Grounding Engine for Formiqo.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_PROMPT_DIR = _REPO_ROOT / "prompts"
 
-Your responsibility is to identify the precise writable regions of fields on structured forms using:
-1. The clean rendered page image
-2. Deterministic line-detection results
-3. Page metadata/layout metadata
-
-You are NOT performing OCR transcription.
-You are NOT extracting business values.
-You are ONLY grounding field locations.
-
-The deterministic line-detection JSON is authoritative structural guidance produced by OpenCV and should be heavily trusted for:
-- horizontal rules
-- vertical rules
-- table cells
-- input boxes
-- checkbox borders
-- section dividers
-
-Use the image primarily for semantic understanding and visual confirmation.
-
-Your objective is to return highly accurate field bounding boxes aligned to the REAL writable areas on the page.
-
-Coordinate System:
-- Origin: top-left
-- Unit: pixels
-- Use EXACT page dimensions from the provided manifest JSON
-- NEVER invent a different coordinate space
-- NEVER normalize coordinates
-- NEVER resize mentally
-- All returned bbox values must map directly to the provided image
-
-Do NOT explain reasoning.
-Return JSON only."""
-
-FORMIQO_GROUNDING_DEVELOPER_PROMPT = """You are working inside the Formiqo hybrid CV + LLM grounding pipeline.
-
-The grounding stage receives exactly these page inputs:
-1. clean converted page PNG
-2. page manifest/layout metadata JSON
-3. deterministic detected_lines.json from OpenCV
-
-Do not expect or reference a highlighted line overlay image during grounding.
-Do not return label bounding boxes. A field bbox must represent the safe writable/stamping area.
-
-Valid field types:
-- text
-- multiline_text
-- checkbox
-- radio
-- date
-- signature
-- character_boxes
-- numeric
-- unknown
-
-Valid field surfaces:
-- solid_box
-- dotted_line
-- underline
-- checkbox
-- radio_circle
-- character_boxes
-- open_area
-- signature_line
-- unknown
-
-Rules:
-1. Use exact page_index, width, and height from the manifest.
-2. Coordinates must use unit px and origin top-left.
-3. Treat detected_lines.json as authoritative structural evidence.
-4. Use the clean page image for semantic understanding and visual confirmation.
-5. Do not invent line coordinates.
-6. Do not include logos, watermarks, stamps, graphics, headings, page numbers, instructions, or body paragraphs as fields.
-7. Only create a field when there is a visible writable target:
-   - blank box
-   - checkbox or radio button
-   - character boxes
-   - dotted line
-   - underline
-   - signature line
-   - clearly writable open area
-8. Prefer smaller accurate writable regions over oversized boxes.
-9. If a writable region is bounded by detected lines, target the white interior (not the stroke pixels). The pipeline snaps bboxes to detected cell interiors when the field center falls inside a cell.
-10. When you know the enclosing lines, list their line_id values in supporting_lines (e.g. line_h_001, line_v_002).
-11. If a writable region is bounded by detected lines, keep bbox inside the borders with small padding.
-12. For checkboxes/radios, bbox should tightly cover only the square/circle, not the label text.
-13. For character boxes, one logical run of boxes should become one field.
-14. For table fields, place the field center in the target cell; bbox will align to that cell interior.
-15. For multi-line regions, return the full writable region.
-16. Maintain geometric consistency across aligned fields.
-17. For dotted/signature lines, do not ignore them.
-18. If uncertain, lower confidence and explain briefly in notes.
-
-Return ONLY valid JSON using this schema:
-
-{
-  "page_index": 0,
-  "width": 0,
-  "height": 0,
-  "unit": "px",
-  "origin": "top-left",
-  "fields": [
-    {
-      "field_id": "string_snake_case",
-      "label": "Visible field label",
-      "type": "text | multiline_text | checkbox | radio | date | signature | character_boxes | numeric | unknown",
-      "field_surface": "solid_box | dotted_line | underline | checkbox | radio_circle | character_boxes | open_area | signature_line | unknown",
-      "bbox": { "x": 0, "y": 0, "w": 0, "h": 0 },
-      "section": "Visible section name if available",
-      "nearby_label_text": "Text visually associated with this field",
-      "supporting_lines": [],
-      "confidence": 0.0,
-      "notes": "Short explanation of why this bbox is the writable region"
-    }
-  ],
-  "warnings": []
-}
-
-Field ID rules:
-- Use stable snake_case names.
-- Good: surname, forenames_in_full, date_of_birth, identity_number, representative_signature.
-- Avoid generic names unless the label is unclear.
-
-Before returning, verify:
-- every bbox is within page bounds
-- every bbox is writable space, not label text
-- no bbox crosses unrelated grid lines (bounding lines of the target cell are OK)
-- checkbox/radio bboxes are tight
-- repeated fields have unique field_ids
-
-Do not return markdown.
-Do not explain anything outside the JSON."""
-
-USER_PROMPT_TEMPLATE = """Ground all writable form fields visible on this page.
-
-You are provided:
-- page_index: {page_index}
-1. A clean rendered page image: {original_png_path}
-2. Page metadata defining the authoritative coordinate space: {page_manifest_json_path}
-3. Deterministic line-detection results from OpenCV: {detected_lines_json_path}
-
-Important:
-Use the line-detection results as strong structural guidance, but visually verify against the page image.
-Use integer pixel coordinates only.
-Preserve exact image coordinate space.
-Do not normalize coordinates.
-Do not return markdown.
-Do not explain anything.
-
-Return only valid JSON."""
-
-COMPACT_JSON_INSTRUCTION = (
-    "\nIMPORTANT: Return compact JSON only. Omit long notes (max 80 characters each). "
+_COMPACT_JSON_SUFFIX = (
+    "\nIMPORTANT: Return compact JSON only. Omit long evidence labels. "
     "Include at most 40 fields. No markdown fences.\n"
 )
 
+_ATTACHMENT_MANIFEST = """Attachments for this page (in order):
+1. highlighted_line_image — PNG with line overlay
+2. line_detection_json — slim line index (line_id, orientation, bbox per line)
+3. page_metadata_json — authoritative page_index, width, height, unit, origin
+"""
 
-def build_user_prompt_text(
+
+def _prompt_dir() -> Path:
+    raw = os.environ.get("FORMIQO_GROUNDING_PROMPT_DIR", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return _DEFAULT_PROMPT_DIR
+
+
+def configure_prompt_dir(path: Path) -> None:
+    """Set prompt directory (also respects FORMIQO_GROUNDING_PROMPT_DIR env)."""
+    os.environ["FORMIQO_GROUNDING_PROMPT_DIR"] = str(path.expanduser().resolve())
+    _load_prompt_file.cache_clear()
+
+
+@lru_cache(maxsize=8)
+def _load_prompt_file(name: str) -> str:
+    path = _prompt_dir() / name
+    if not path.is_file():
+        raise FileNotFoundError(f"Grounding prompt file not found: {path}")
+    return path.read_text(encoding="utf-8").strip()
+
+
+def load_grounding_system_prompt() -> str:
+    return _load_prompt_file("grounding_system.md")
+
+
+def load_grounding_developer_prompt() -> str:
+    return _load_prompt_file("grounding_developer.md")
+
+
+def load_grounding_user_prompt() -> str:
+    return _load_prompt_file("grounding_user.md")
+
+
+def _compact_json(data: Any) -> str:
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+
+
+def slim_line_detection_for_prompt(detected_lines: dict[str, Any]) -> dict[str, Any]:
+    """
+    Reduce detected_lines to what the LLM needs: page bounds plus line_id, orientation, bbox.
+    Full detected_lines.json on disk is unchanged for geometry and validation.
+    """
+    image = detected_lines.get("image")
+    out: dict[str, Any] = {"lines": []}
+    if isinstance(image, dict):
+        width = image.get("width")
+        height = image.get("height")
+        if isinstance(width, int) and isinstance(height, int):
+            out["width"] = width
+            out["height"] = height
+
+    raw_lines = detected_lines.get("lines")
+    if not isinstance(raw_lines, list):
+        return out
+
+    slim_lines: list[dict[str, Any]] = []
+    for ln in raw_lines:
+        if not isinstance(ln, dict):
+            continue
+        line_id = ln.get("line_id")
+        bbox = ln.get("bbox")
+        if not isinstance(line_id, str) or not line_id.strip():
+            continue
+        if not isinstance(bbox, dict):
+            continue
+        try:
+            bb = {k: int(bbox[k]) for k in ("x", "y", "w", "h")}
+        except (KeyError, TypeError, ValueError):
+            continue
+        entry: dict[str, Any] = {
+            "line_id": line_id,
+            "bbox": bb,
+        }
+        orientation = ln.get("orientation")
+        if isinstance(orientation, str) and orientation:
+            entry["orientation"] = orientation
+        slim_lines.append(entry)
+
+    out["lines"] = slim_lines
+    return out
+
+
+def line_detection_payload_for_prompt(
+    detected_lines: dict[str, Any],
     *,
-    page_index: int,
-    original_png_path: str,
-    detected_lines_json_path: str,
-    page_manifest_json_path: str,
-    geometry_summary: str | None = None,
-    validator_errors: list[dict[str, Any]] | None = None,
+    slim: bool = True,
+) -> dict[str, Any]:
+    if slim:
+        return slim_line_detection_for_prompt(detected_lines)
+    return detected_lines
+
+
+def build_attachment_manifest(*, include_manifest: bool = True) -> str:
+    if not include_manifest:
+        return ""
+    return _ATTACHMENT_MANIFEST
+
+
+def build_user_text_bundle(
+    *,
+    detected_lines: dict[str, Any],
+    page_manifest: dict[str, Any],
     compact_json: bool = False,
+    include_attachment_manifest: bool = True,
+    slim_line_detection: bool = True,
 ) -> str:
-    body = USER_PROMPT_TEMPLATE.format(
-        page_index=page_index,
-        original_png_path=original_png_path,
-        detected_lines_json_path=detected_lines_json_path,
-        page_manifest_json_path=page_manifest_json_path,
-    )
-    parts = [body]
-    if geometry_summary:
-        parts.append("\n" + geometry_summary)
-    if validator_errors:
-        parts.append("\nPrevious attempt failed validation. Fix bboxes only; do not invent line coordinates.\n")
-        parts.append(json.dumps({"validator_errors": validator_errors}, indent=2))
+    parts: list[str] = []
+    manifest = build_attachment_manifest(include_manifest=include_attachment_manifest)
+    if manifest:
+        parts.append(manifest)
+    parts.append(load_grounding_user_prompt())
+    parts.append("highlighted_line_image:\n[attached PNG below]")
+    line_payload = line_detection_payload_for_prompt(detected_lines, slim=slim_line_detection)
+    parts.append("line_detection_json:\n" + _compact_json(line_payload))
+    parts.append("page_metadata_json:\n" + _compact_json(page_manifest))
     if compact_json:
-        parts.append(COMPACT_JSON_INSTRUCTION)
-    return "\n".join(parts)
+        parts.append(_COMPACT_JSON_SUFFIX)
+    return "\n\n".join(parts)
 
 
 def _image_media_type(path: Path) -> str:
@@ -221,109 +173,139 @@ def _anthropic_image_block(path: Path) -> dict[str, Any]:
     }
 
 
-def build_user_text_bundle(
+def _openai_user_content(
     *,
-    page_index: int,
-    original_png: Path,
+    highlighted_png: Path,
     detected_lines: dict[str, Any],
     page_manifest: dict[str, Any],
-    rel_original: str,
-    rel_lines_json: str,
-    rel_page_manifest: str,
-    geometry_summary: str | None = None,
-    validator_errors: list[dict[str, Any]] | None = None,
     compact_json: bool = False,
-) -> str:
-    user_text = build_user_prompt_text(
-        page_index=page_index,
-        original_png_path=rel_original,
-        detected_lines_json_path=rel_lines_json,
-        page_manifest_json_path=rel_page_manifest,
-        geometry_summary=geometry_summary,
-        validator_errors=validator_errors,
+    include_attachment_manifest: bool = True,
+    slim_line_detection: bool = True,
+) -> list[dict[str, Any]]:
+    user_text = build_user_text_bundle(
+        detected_lines=detected_lines,
+        page_manifest=page_manifest,
         compact_json=compact_json,
+        include_attachment_manifest=include_attachment_manifest,
+        slim_line_detection=slim_line_detection,
     )
-    user_text += "\n\ndetected_lines.json:\n" + json.dumps(detected_lines, indent=2)
-    user_text += "\n\npage_manifest.json:\n" + json.dumps(page_manifest, indent=2)
-    return user_text
+    return [
+        {"type": "text", "text": user_text},
+        _openai_image_part(highlighted_png),
+    ]
 
 
 def build_openai_messages(
     *,
-    page_index: int,
-    original_png: Path,
+    highlighted_png: Path,
     detected_lines: dict[str, Any],
     page_manifest: dict[str, Any],
-    rel_original: str,
-    rel_lines_json: str,
-    rel_page_manifest: str,
-    geometry_summary: str | None = None,
-    validator_errors: list[dict[str, Any]] | None = None,
     compact_json: bool = False,
+    include_attachment_manifest: bool = True,
+    slim_line_detection: bool = True,
 ) -> list[dict[str, Any]]:
     """Chat Completions messages with system + developer + multimodal user."""
-    user_text = build_user_text_bundle(
-        page_index=page_index,
-        original_png=original_png,
-        detected_lines=detected_lines,
-        page_manifest=page_manifest,
-        rel_original=rel_original,
-        rel_lines_json=rel_lines_json,
-        rel_page_manifest=rel_page_manifest,
-        geometry_summary=geometry_summary,
-        validator_errors=validator_errors,
-        compact_json=compact_json,
-    )
-
-    user_content: list[dict[str, Any]] = [
-        {"type": "text", "text": user_text},
-        _openai_image_part(original_png),
-    ]
-
     return [
-        {"role": "system", "content": FORMIQO_GROUNDING_SYSTEM_PROMPT},
-        {"role": "developer", "content": FORMIQO_GROUNDING_DEVELOPER_PROMPT},
-        {"role": "user", "content": user_content},
+        {"role": "system", "content": load_grounding_system_prompt()},
+        {"role": "developer", "content": load_grounding_developer_prompt()},
+        {
+            "role": "user",
+            "content": _openai_user_content(
+                highlighted_png=highlighted_png,
+                detected_lines=detected_lines,
+                page_manifest=page_manifest,
+                compact_json=compact_json,
+                include_attachment_manifest=include_attachment_manifest,
+                slim_line_detection=slim_line_detection,
+            ),
+        },
     ]
 
 
 def build_anthropic_messages(
     *,
-    page_index: int,
-    original_png: Path,
+    highlighted_png: Path,
     detected_lines: dict[str, Any],
     page_manifest: dict[str, Any],
-    rel_original: str,
-    rel_lines_json: str,
-    rel_page_manifest: str,
-    geometry_summary: str | None = None,
-    validator_errors: list[dict[str, Any]] | None = None,
     compact_json: bool = False,
+    include_attachment_manifest: bool = True,
+    slim_line_detection: bool = True,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """
-    Return ``(system_text, user_content_blocks)`` for Anthropic Messages API.
-
-    Developer instructions are folded into system (Anthropic has no developer role).
-    """
-    user_text = build_user_text_bundle(
-        page_index=page_index,
-        original_png=original_png,
-        detected_lines=detected_lines,
-        page_manifest=page_manifest,
-        rel_original=rel_original,
-        rel_lines_json=rel_lines_json,
-        rel_page_manifest=rel_page_manifest,
-        geometry_summary=geometry_summary,
-        validator_errors=validator_errors,
-        compact_json=compact_json,
-    )
+    """Return ``(system_text, user_content_blocks)`` for Anthropic Messages API."""
     system_text = (
-        FORMIQO_GROUNDING_SYSTEM_PROMPT
+        load_grounding_system_prompt()
         + "\n\n"
-        + FORMIQO_GROUNDING_DEVELOPER_PROMPT
+        + load_grounding_developer_prompt()
     )
     user_content: list[dict[str, Any]] = [
-        {"type": "text", "text": user_text},
-        _anthropic_image_block(original_png),
+        {
+            "type": "text",
+            "text": build_user_text_bundle(
+                detected_lines=detected_lines,
+                page_manifest=page_manifest,
+                compact_json=compact_json,
+                include_attachment_manifest=include_attachment_manifest,
+                slim_line_detection=slim_line_detection,
+            ),
+        },
+        _anthropic_image_block(highlighted_png),
     ]
     return system_text, user_content
+
+
+def _field_surface_for_llm_type(llm_type: str, existing: str | None) -> str:
+    if isinstance(existing, str) and existing.strip() and existing != "unknown":
+        return existing
+    if llm_type == "table_cell":
+        return "solid_box"
+    if llm_type in ("checkbox", "radio"):
+        return "checkbox" if llm_type == "checkbox" else "radio_circle"
+    if llm_type == "signature":
+        return "signature_line"
+    if llm_type == "date":
+        return "underline"
+    return "unknown"
+
+
+def adapt_grounding_field(field: dict[str, Any]) -> dict[str, Any]:
+    """Map LLM grounding field shape to internal validator/stamping shape."""
+    from app.grounding_field_types import normalize_llm_field_type
+
+    out = dict(field)
+    raw_type = field.get("type")
+    llm_type = raw_type if isinstance(raw_type, str) else "unknown"
+    internal_type = normalize_llm_field_type(llm_type)
+    out["type"] = internal_type
+    if llm_type != internal_type:
+        out["grounding_type"] = llm_type
+
+    evidence = field.get("evidence")
+    if isinstance(evidence, dict):
+        label = evidence.get("label")
+        if isinstance(label, str) and label.strip():
+            out["label"] = label.strip()
+            out["nearby_label_text"] = label.strip()
+        line_ids = evidence.get("line_ids")
+        if isinstance(line_ids, list):
+            out["supporting_lines"] = [lid for lid in line_ids if isinstance(lid, str) and lid]
+
+    existing_surface = field.get("field_surface")
+    surface_val = existing_surface if isinstance(existing_surface, str) else None
+    out["field_surface"] = _field_surface_for_llm_type(llm_type, surface_val)
+
+    return out
+
+
+def adapt_grounding_response(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize top-level LLM JSON to internal grounding payload."""
+    out = dict(raw)
+    fields = raw.get("fields")
+    if isinstance(fields, list):
+        out["fields"] = [
+            adapt_grounding_field(f) if isinstance(f, dict) else f for f in fields
+        ]
+    if out.get("unit") is None:
+        out["unit"] = "px"
+    if out.get("origin") is None:
+        out["origin"] = "top-left"
+    return out

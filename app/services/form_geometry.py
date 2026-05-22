@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-# Shared with grounding_validator toggle checks (avoid importing validator here).
+# Toggle size cap used when normalizing checkbox/radio bboxes to cells.
 MAX_TOGGLE_AREA = 2500
 
 BOUNDED_SURFACES = frozenset({"solid_box", "character_boxes"})

@@ -277,7 +277,6 @@ class SemanticGroundingPageResult(BaseModel):
     page_index: int
     status: str
     grounding_file: str | None = None
-    raw_response_file: str | None = None
     error: str | None = None
     detail: Any | None = None
 

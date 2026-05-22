@@ -1,0 +1,1671 @@
+{
+  "page_index": 0,
+  "width": 1700,
+  "height": 2200,
+  "unit": "px",
+  "origin": "top-left",
+  "fields": [
+    {
+      "field_id": "type_application_visitor",
+      "type": "checkbox",
+      "bbox": {
+        "x": 322,
+        "y": 251,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.95,
+      "evidence": {
+        "label": "Visitor",
+        "line_ids": []
+      },
+      "label": "Visitor",
+      "nearby_label_text": "Visitor",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "type_application_worker",
+      "type": "checkbox",
+      "bbox": {
+        "x": 528,
+        "y": 251,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.95,
+      "evidence": {
+        "label": "Worker",
+        "line_ids": []
+      },
+      "label": "Worker",
+      "nearby_label_text": "Worker",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "type_application_student",
+      "type": "checkbox",
+      "bbox": {
+        "x": 750,
+        "y": 251,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.95,
+      "evidence": {
+        "label": "Student",
+        "line_ids": []
+      },
+      "label": "Student",
+      "nearby_label_text": "Student",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "type_application_other",
+      "type": "checkbox",
+      "bbox": {
+        "x": 962,
+        "y": 251,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.95,
+      "evidence": {
+        "label": "Other",
+        "line_ids": []
+      },
+      "label": "Other",
+      "nearby_label_text": "Other",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "applicant_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 549,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Name - Applicant",
+        "line_ids": [
+          "line_h_008"
+        ]
+      },
+      "label": "Name - Applicant",
+      "nearby_label_text": "Name - Applicant",
+      "supporting_lines": [
+        "line_h_008"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "applicant_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 625,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_010",
+          "line_h_012"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_010",
+        "line_h_012"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "applicant_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 549,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth (YYYY-MM-DD)",
+        "line_ids": [
+          "line_h_009"
+        ]
+      },
+      "label": "Date of birth (YYYY-MM-DD)",
+      "nearby_label_text": "Date of birth (YYYY-MM-DD)",
+      "supporting_lines": [
+        "line_h_009"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "applicant_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 593,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_010"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_010"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "applicant_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 549,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_011"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_011"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "applicant_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 625,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": [
+          "line_h_012"
+        ]
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_012"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 685,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Spouse or common-law partner - Name",
+        "line_ids": []
+      },
+      "label": "Spouse or common-law partner - Name",
+      "nearby_label_text": "Spouse or common-law partner - Name",
+      "supporting_lines": [
+        "line_h_012",
+        "line_h_013",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 761,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_014"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_014"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 685,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_013"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_013"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "spouse_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 729,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_014"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_014"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 685,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_015"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_015"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 761,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_014",
+        "line_h_016",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "spouse_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 728,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "Will accompany you to Canada? YES",
+        "line_ids": []
+      },
+      "label": "Will accompany you to Canada? YES",
+      "nearby_label_text": "Will accompany you to Canada? YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "spouse_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 728,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "Will accompany you to Canada? NO",
+        "line_ids": []
+      },
+      "label": "Will accompany you to Canada? NO",
+      "nearby_label_text": "Will accompany you to Canada? NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "mother_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 821,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Mother - Name",
+        "line_ids": []
+      },
+      "label": "Mother - Name",
+      "nearby_label_text": "Mother - Name",
+      "supporting_lines": [
+        "line_h_016",
+        "line_h_017",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "mother_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 897,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_018"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_018"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "mother_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 821,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_017"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_017"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "mother_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 865,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_018"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_018"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "mother_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 821,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_019"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_019"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "mother_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 897,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_018",
+        "line_h_020",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "mother_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 864,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "mother_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 864,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "father_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 957,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Father - Name",
+        "line_ids": []
+      },
+      "label": "Father - Name",
+      "nearby_label_text": "Father - Name",
+      "supporting_lines": [
+        "line_h_020",
+        "line_h_021",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "father_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1033,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_022"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_022"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "father_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 957,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_021"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_021"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "father_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 1001,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_022"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_022"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "father_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 957,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_023"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_023"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "father_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1033,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_022",
+        "line_h_024",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "father_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 1000,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "father_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 1000,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "section_a_signature",
+      "type": "text",
+      "bbox": {
+        "x": 158,
+        "y": 1093,
+        "w": 986,
+        "h": 124
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Signature",
+        "line_ids": [
+          "line_h_025"
+        ]
+      },
+      "label": "Signature",
+      "nearby_label_text": "Signature",
+      "supporting_lines": [
+        "line_h_025"
+      ],
+      "field_surface": "signature_line",
+      "grounding_type": "signature"
+    },
+    {
+      "field_id": "section_a_signature_date",
+      "type": "text",
+      "bbox": {
+        "x": 1328,
+        "y": 1093,
+        "w": 306,
+        "h": 124
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date (YYYY-MM-DD)",
+        "line_ids": [
+          "line_h_026"
+        ]
+      },
+      "label": "Date (YYYY-MM-DD)",
+      "nearby_label_text": "Date (YYYY-MM-DD)",
+      "supporting_lines": [
+        "line_h_026"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "child1_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1353,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Child 1 - Name",
+        "line_ids": []
+      },
+      "label": "Child 1 - Name",
+      "nearby_label_text": "Child 1 - Name",
+      "supporting_lines": [
+        "line_h_029",
+        "line_h_030",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1429,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_031"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_031"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_relationship",
+      "type": "text",
+      "bbox": {
+        "x": 413,
+        "y": 1397,
+        "w": 144,
+        "h": 26
+      },
+      "confidence": 0.85,
+      "evidence": {
+        "label": "Relationship",
+        "line_ids": []
+      },
+      "label": "Relationship",
+      "nearby_label_text": "Relationship",
+      "supporting_lines": [
+        "line_h_030",
+        "line_h_031",
+        "line_v_003",
+        "line_v_005"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 1353,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_030"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_030"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "child1_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 1397,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_031"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_031"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1353,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_032"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_032"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1429,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_031",
+        "line_h_033",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child1_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 1396,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child1_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 1396,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child2_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1489,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Child 2 - Name",
+        "line_ids": []
+      },
+      "label": "Child 2 - Name",
+      "nearby_label_text": "Child 2 - Name",
+      "supporting_lines": [
+        "line_h_033",
+        "line_h_034",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1565,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_035"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_035"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_relationship",
+      "type": "text",
+      "bbox": {
+        "x": 413,
+        "y": 1533,
+        "w": 144,
+        "h": 26
+      },
+      "confidence": 0.85,
+      "evidence": {
+        "label": "Relationship",
+        "line_ids": []
+      },
+      "label": "Relationship",
+      "nearby_label_text": "Relationship",
+      "supporting_lines": [
+        "line_h_034",
+        "line_h_035",
+        "line_v_003",
+        "line_v_005"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 1489,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_034"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_034"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "child2_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 1533,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_035"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_035"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1489,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_036"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_036"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1565,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_035",
+        "line_h_037",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child2_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 1532,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child2_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 1532,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child3_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1625,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Child 3 - Name",
+        "line_ids": []
+      },
+      "label": "Child 3 - Name",
+      "nearby_label_text": "Child 3 - Name",
+      "supporting_lines": [
+        "line_h_037",
+        "line_h_038",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1701,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_039"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_039"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_relationship",
+      "type": "text",
+      "bbox": {
+        "x": 413,
+        "y": 1669,
+        "w": 144,
+        "h": 26
+      },
+      "confidence": 0.85,
+      "evidence": {
+        "label": "Relationship",
+        "line_ids": []
+      },
+      "label": "Relationship",
+      "nearby_label_text": "Relationship",
+      "supporting_lines": [
+        "line_h_038",
+        "line_h_039",
+        "line_v_003",
+        "line_v_005"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 1625,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_038"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_038"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "child3_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 1669,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_039"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_039"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1625,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_040"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_040"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1701,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_039",
+        "line_h_041",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child3_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 1668,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child3_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 1668,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child4_name",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1761,
+        "w": 344,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Child 4 - Name",
+        "line_ids": []
+      },
+      "label": "Child 4 - Name",
+      "nearby_label_text": "Child 4 - Name",
+      "supporting_lines": [
+        "line_h_041",
+        "line_h_042",
+        "line_v_001",
+        "line_v_003"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_marital_status",
+      "type": "text",
+      "bbox": {
+        "x": 63,
+        "y": 1837,
+        "w": 344,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Marital status",
+        "line_ids": [
+          "line_h_043"
+        ]
+      },
+      "label": "Marital status",
+      "nearby_label_text": "Marital status",
+      "supporting_lines": [
+        "line_h_043"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_relationship",
+      "type": "text",
+      "bbox": {
+        "x": 413,
+        "y": 1805,
+        "w": 144,
+        "h": 26
+      },
+      "confidence": 0.85,
+      "evidence": {
+        "label": "Relationship",
+        "line_ids": []
+      },
+      "label": "Relationship",
+      "nearby_label_text": "Relationship",
+      "supporting_lines": [
+        "line_h_042",
+        "line_h_043",
+        "line_v_003",
+        "line_v_005"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_dob",
+      "type": "text",
+      "bbox": {
+        "x": 562,
+        "y": 1761,
+        "w": 305,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date of birth",
+        "line_ids": [
+          "line_h_042"
+        ]
+      },
+      "label": "Date of birth",
+      "nearby_label_text": "Date of birth",
+      "supporting_lines": [
+        "line_h_042"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    },
+    {
+      "field_id": "child4_country_of_birth",
+      "type": "text",
+      "bbox": {
+        "x": 563,
+        "y": 1805,
+        "w": 304,
+        "h": 26
+      },
+      "confidence": 0.88,
+      "evidence": {
+        "label": "Country of birth",
+        "line_ids": [
+          "line_h_043"
+        ]
+      },
+      "label": "Country of birth",
+      "nearby_label_text": "Country of birth",
+      "supporting_lines": [
+        "line_h_043"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_present_address",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1761,
+        "w": 604,
+        "h": 38
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present address",
+        "line_ids": [
+          "line_h_044"
+        ]
+      },
+      "label": "Present address",
+      "nearby_label_text": "Present address",
+      "supporting_lines": [
+        "line_h_044"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_present_occupation",
+      "type": "text",
+      "bbox": {
+        "x": 873,
+        "y": 1837,
+        "w": 604,
+        "h": 54
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Present occupation",
+        "line_ids": []
+      },
+      "label": "Present occupation",
+      "nearby_label_text": "Present occupation",
+      "supporting_lines": [
+        "line_h_043",
+        "line_h_045",
+        "line_v_007",
+        "line_v_009"
+      ],
+      "field_surface": "unknown"
+    },
+    {
+      "field_id": "child4_accompany_yes",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1502,
+        "y": 1804,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "YES",
+        "line_ids": []
+      },
+      "label": "YES",
+      "nearby_label_text": "YES",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "child4_accompany_no",
+      "type": "checkbox",
+      "bbox": {
+        "x": 1577,
+        "y": 1804,
+        "w": 26,
+        "h": 26
+      },
+      "confidence": 0.92,
+      "evidence": {
+        "label": "NO",
+        "line_ids": []
+      },
+      "label": "NO",
+      "nearby_label_text": "NO",
+      "supporting_lines": [],
+      "field_surface": "checkbox"
+    },
+    {
+      "field_id": "section_b_signature",
+      "type": "text",
+      "bbox": {
+        "x": 158,
+        "y": 1897,
+        "w": 986,
+        "h": 104
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Signature",
+        "line_ids": [
+          "line_h_046"
+        ]
+      },
+      "label": "Signature",
+      "nearby_label_text": "Signature",
+      "supporting_lines": [
+        "line_h_046"
+      ],
+      "field_surface": "signature_line",
+      "grounding_type": "signature"
+    },
+    {
+      "field_id": "section_b_signature_date",
+      "type": "text",
+      "bbox": {
+        "x": 1328,
+        "y": 1897,
+        "w": 306,
+        "h": 104
+      },
+      "confidence": 0.9,
+      "evidence": {
+        "label": "Date (YYYY-MM-DD)",
+        "line_ids": [
+          "line_h_047"
+        ]
+      },
+      "label": "Date (YYYY-MM-DD)",
+      "nearby_label_text": "Date (YYYY-MM-DD)",
+      "supporting_lines": [
+        "line_h_047"
+      ],
+      "field_surface": "underline",
+      "grounding_type": "date"
+    }
+  ]
+}

@@ -17,13 +17,15 @@ from app.config import Settings
 from app.grounding_field_types import stamping_type_for_field
 from app.services.form_geometry import (
     build_geometry_index,
-    geometry_summary_for_prompt,
     load_detected_lines,
     normalize_page_grounding,
 )
-from app.services.grounding_prompt import build_anthropic_messages, build_openai_messages
-from app.services.grounding_validator import GroundingValidationError, validate_page_grounding
-from app.services.jobs import to_output_relative_path
+from app.services.grounding_prompt import (
+    adapt_grounding_response,
+    build_anthropic_messages,
+    build_openai_messages,
+    configure_prompt_dir,
+)
 from app.services.line_detection_job import list_converted_page_pngs
 
 LOG = logging.getLogger(__name__)
@@ -96,15 +98,9 @@ def _anthropic_usage_dict(usage: Any) -> dict[str, int] | None:
     return result or None
 
 
-def _grounding_attempt_label(
-    *,
-    compact_json: bool,
-    validator_errors: list[dict[str, Any]] | None,
-) -> Literal["initial", "compact_retry", "repair"]:
+def _grounding_attempt_label(*, compact_json: bool) -> Literal["initial", "compact_retry"]:
     if compact_json:
         return "compact_retry"
-    if validator_errors:
-        return "repair"
     return "initial"
 
 
@@ -114,7 +110,7 @@ def _log_grounding_llm_usage(
     page_index: int,
     provider: str,
     model: str,
-    attempt: Literal["initial", "compact_retry", "repair"],
+    attempt: Literal["initial", "compact_retry"],
     call: GroundingLlmCallResult,
 ) -> None:
     truncated = _is_output_truncated(provider=provider, finish_reason=call.finish_reason)
@@ -257,31 +253,23 @@ def _call_grounding_llm_raw(
     settings: Settings,
     openai_client: OpenAI | None,
     anthropic_client: Anthropic | None,
-    page_index: int,
     paths: dict[str, Path],
     detected_lines: dict[str, Any],
     page_manifest: dict[str, Any],
-    rel_original: str,
-    rel_lines: str,
-    rel_manifest: str,
-    geo_summary: str,
-    validator_errors: list[dict[str, Any]] | None,
     compact_json: bool,
+    include_attachment_manifest: bool,
 ) -> GroundingLlmCallResult:
+    slim_lines = settings.grounding_slim_line_detection
     if provider == "openai":
         if openai_client is None:
             raise ValueError("OpenAI client not configured.")
         messages = build_openai_messages(
-            page_index=page_index,
-            original_png=paths["original"],
+            highlighted_png=paths["highlighted"],
             detected_lines=detected_lines,
             page_manifest=page_manifest,
-            rel_original=rel_original,
-            rel_lines_json=rel_lines,
-            rel_page_manifest=rel_manifest,
-            geometry_summary=geo_summary,
-            validator_errors=validator_errors,
             compact_json=compact_json,
+            include_attachment_manifest=include_attachment_manifest,
+            slim_line_detection=slim_lines,
         )
         return _call_openai_grounding_raw(
             client=openai_client,
@@ -294,16 +282,12 @@ def _call_grounding_llm_raw(
     if anthropic_client is None:
         raise ValueError("Anthropic client not configured.")
     system_text, user_content = build_anthropic_messages(
-        page_index=page_index,
-        original_png=paths["original"],
+        highlighted_png=paths["highlighted"],
         detected_lines=detected_lines,
         page_manifest=page_manifest,
-        rel_original=rel_original,
-        rel_lines_json=rel_lines,
-        rel_page_manifest=rel_manifest,
-        geometry_summary=geo_summary,
-        validator_errors=validator_errors,
         compact_json=compact_json,
+        include_attachment_manifest=include_attachment_manifest,
+        slim_line_detection=slim_lines,
     )
     return _call_anthropic_grounding_raw(
         client=anthropic_client,
@@ -329,31 +313,22 @@ def _fetch_grounding_payload(
     paths: dict[str, Path],
     detected_lines: dict[str, Any],
     page_manifest: dict[str, Any],
-    rel_original: str,
-    rel_lines: str,
-    rel_manifest: str,
-    geo_summary: str,
-    validator_errors: list[dict[str, Any]] | None,
     compact_json: bool = False,
+    include_attachment_manifest: bool = True,
 ) -> dict[str, Any]:
     """Call vision API and parse JSON; retry once with compact-json instructions on JSONDecodeError."""
-    attempt = _grounding_attempt_label(compact_json=compact_json, validator_errors=validator_errors)
+    attempt = _grounding_attempt_label(compact_json=compact_json)
     call = _call_grounding_llm_raw(
         provider=provider,
         model=model,
         settings=settings,
         openai_client=openai_client,
         anthropic_client=anthropic_client,
-        page_index=page_index,
         paths=paths,
         detected_lines=detected_lines,
         page_manifest=page_manifest,
-        rel_original=rel_original,
-        rel_lines=rel_lines,
-        rel_manifest=rel_manifest,
-        geo_summary=geo_summary,
-        validator_errors=validator_errors,
         compact_json=compact_json,
+        include_attachment_manifest=include_attachment_manifest,
     )
     _log_grounding_llm_usage(
         job_id=job_id,
@@ -364,11 +339,12 @@ def _fetch_grounding_payload(
         call=call,
     )
     try:
-        return _parse_grounding_json(
+        parsed = _parse_grounding_json(
             provider=provider,
             raw_text=call.raw_text,
             finish_reason=call.finish_reason,
         )
+        return adapt_grounding_response(parsed)
     except json.JSONDecodeError:
         if compact_json:
             raise
@@ -384,19 +360,15 @@ def _fetch_grounding_payload(
             paths=paths,
             detected_lines=detected_lines,
             page_manifest=page_manifest,
-            rel_original=rel_original,
-            rel_lines=rel_lines,
-            rel_manifest=rel_manifest,
-            geo_summary=geo_summary,
-            validator_errors=validator_errors,
             compact_json=True,
+            include_attachment_manifest=include_attachment_manifest,
         )
 
 
 def _page_paths(output_dir: Path, page_index: int) -> dict[str, Path]:
     stem = f"page_{page_index + 1:04d}"
     return {
-        "original": output_dir / "converted_images" / f"{stem}.png",
+        "highlighted": output_dir / "line_detection" / stem / "lines_highlighted.png",
         "lines_json": output_dir / "line_detection" / stem / "detected_lines.json",
         "page_manifest": output_dir / "converted_images" / "pages" / f"{stem}.json",
     }
@@ -406,26 +378,11 @@ def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-_GEOMETRY_REPAIR_ERROR_CODES = frozenset(
-    {"crosses_line", "writable_proximity", "out_of_bounds", "outside_cell"}
-)
-
-
 def _page_image_dimensions(page_manifest: dict[str, Any]) -> tuple[int, int]:
     image_node = page_manifest.get("image")
     if not isinstance(image_node, dict):
         raise ValueError("Page manifest missing image object.")
     return int(image_node["saved_image_width_px"]), int(image_node["saved_image_height_px"])
-
-
-def _errors_are_geometry_only(errors: list[dict[str, Any]]) -> bool:
-    if not errors:
-        return False
-    for err in errors:
-        code = err.get("code")
-        if code not in _GEOMETRY_REPAIR_ERROR_CODES:
-            return False
-    return True
 
 
 def _apply_normalize(
@@ -444,23 +401,6 @@ def _apply_normalize(
         page_w=img_w,
         page_h=img_h,
         aggressive=aggressive,
-    )
-
-
-def _validate_grounding(
-    payload: dict[str, Any],
-    *,
-    detected_lines: dict[str, Any],
-    page_manifest: dict[str, Any],
-    geometry: dict[str, Any],
-    settings: Settings,
-) -> list[dict[str, Any]]:
-    return validate_page_grounding(
-        payload,
-        detected_lines=detected_lines,
-        page_manifest=page_manifest,
-        line_padding_px=settings.grounding_line_padding_px,
-        geometry=geometry,
     )
 
 
@@ -484,7 +424,6 @@ def ground_one_page(
     settings: Settings,
     openai_client: OpenAI | None,
     anthropic_client: Anthropic | None,
-    allow_repair: bool = True,
 ) -> dict[str, Any]:
     paths = _page_paths(output_dir, page_index)
     for key, path in paths.items():
@@ -497,13 +436,7 @@ def ground_one_page(
         detected_lines,
         line_padding_px=settings.grounding_line_padding_px,
     )
-    geo_summary = geometry_summary_for_prompt(geometry)
 
-    rel_original = to_output_relative_path(output_dir, paths["original"])
-    rel_lines = to_output_relative_path(output_dir, paths["lines_json"])
-    rel_manifest = to_output_relative_path(output_dir, paths["page_manifest"])
-
-    validator_errors: list[dict[str, Any]] | None = None
     raw_response = _fetch_grounding_payload(
         job_id=job_id,
         provider=provider,
@@ -515,12 +448,8 @@ def ground_one_page(
         paths=paths,
         detected_lines=detected_lines,
         page_manifest=page_manifest,
-        rel_original=rel_original,
-        rel_lines=rel_lines,
-        rel_manifest=rel_manifest,
-        geo_summary=geo_summary,
-        validator_errors=None,
         compact_json=False,
+        include_attachment_manifest=True,
     )
 
     raw_response = _apply_normalize(
@@ -529,88 +458,9 @@ def ground_one_page(
         page_manifest=page_manifest,
         settings=settings,
     )
-
-    if allow_repair:
-        errors = _validate_grounding(
-            raw_response,
-            detected_lines=detected_lines,
-            page_manifest=page_manifest,
-            geometry=geometry,
-            settings=settings,
-        )
-        if errors and _errors_are_geometry_only(errors):
-            LOG.info(
-                "grounding page %d deterministic geometry repair (%d errors)",
-                page_index,
-                len(errors),
-            )
-            raw_response = _apply_normalize(
-                raw_response,
-                geometry=geometry,
-                page_manifest=page_manifest,
-                settings=settings,
-                aggressive=True,
-            )
-            errors = _validate_grounding(
-                raw_response,
-                detected_lines=detected_lines,
-                page_manifest=page_manifest,
-                geometry=geometry,
-                settings=settings,
-            )
-
-        if errors:
-            validator_errors = errors
-            LOG.info("grounding page %d LLM repair attempt (%d errors)", page_index, len(errors))
-            raw_response = _fetch_grounding_payload(
-                job_id=job_id,
-                provider=provider,
-                model=model,
-                settings=settings,
-                openai_client=openai_client,
-                anthropic_client=anthropic_client,
-                page_index=page_index,
-                paths=paths,
-                detected_lines=detected_lines,
-                page_manifest=page_manifest,
-                rel_original=rel_original,
-                rel_lines=rel_lines,
-                rel_manifest=rel_manifest,
-                geo_summary=geo_summary,
-                validator_errors=validator_errors,
-                compact_json=False,
-            )
-            raw_response = _apply_normalize(
-                raw_response,
-                geometry=geometry,
-                page_manifest=page_manifest,
-                settings=settings,
-            )
-            errors = _validate_grounding(
-                raw_response,
-                detected_lines=detected_lines,
-                page_manifest=page_manifest,
-                geometry=geometry,
-                settings=settings,
-            )
-            if errors:
-                raise GroundingValidationError(errors)
-    else:
-        errors = _validate_grounding(
-            raw_response,
-            detected_lines=detected_lines,
-            page_manifest=page_manifest,
-            geometry=geometry,
-            settings=settings,
-        )
-        if errors:
-            raise GroundingValidationError(errors)
-
-    assert raw_response is not None
     return {
         "page_index": page_index,
         "grounding": raw_response,
-        "geometry_index": geometry,
     }
 
 
@@ -623,9 +473,7 @@ def write_field_grounding_outputs(
     page_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
     fg_dir = output_dir / "field_grounding"
-    raw_dir = fg_dir / "raw"
     fg_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir.mkdir(parents=True, exist_ok=True)
 
     pages_meta: list[dict[str, Any]] = []
     for pr in page_results:
@@ -646,19 +494,11 @@ def write_field_grounding_outputs(
         }
         out_path.write_text(json.dumps(stamp_payload, indent=2) + "\n", encoding="utf-8")
 
-        raw_path = raw_dir / f"{stem}.response.json"
-        raw_path.write_text(json.dumps(grounding, indent=2) + "\n", encoding="utf-8")
-
-        geo_path = output_dir / "line_detection" / stem / "geometry_index.json"
-        if "geometry_index" in pr:
-            geo_path.write_text(json.dumps(pr["geometry_index"], indent=2) + "\n", encoding="utf-8")
-
         pages_meta.append(
             {
                 "page_index": page_index,
                 "status": "ok",
                 "grounding_file": f"field_grounding/{out_name}",
-                "raw_response_file": f"field_grounding/raw/{stem}.response.json",
             }
         )
 
@@ -702,6 +542,7 @@ def run_semantic_grounding_for_job(
     model: str | None = None,
 ) -> dict[str, Any]:
     prov, resolved_model = resolve_grounding_model(provider=provider, model=model, settings=settings)
+    configure_prompt_dir(settings.grounding_prompt_dir)
 
     openai_client: OpenAI | None = None
     anthropic_client: Anthropic | None = None
@@ -738,11 +579,7 @@ def run_semantic_grounding_for_job(
             succeeded.append(result)
         except Exception as exc:
             LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
-            err_detail: Any
-            if isinstance(exc, GroundingValidationError):
-                err_detail = exc.errors
-            else:
-                err_detail = str(exc)
+            err_detail: Any = str(exc)
             failed_pages.append(
                 {
                     "page_index": page_index,

@@ -11,10 +11,7 @@ http://127.0.0.1:8000/docs#/
 - openai: `gpt-4o or gpt-5.5`
 - anthropic: `claude-opus-4-6 or claude-opus-4-7`
 
-### Grounding geometry (optional env)
-
-- `FORMIQO_GROUNDING_LINE_PADDING_PX` (default `3`) — line intersection padding in validation
-- `FORMIQO_GROUNDING_STAMP_INSET_PX` (default `2`) — inset when snapping bboxes to cells/bands
+### Grounding (optional env)
 
 
 

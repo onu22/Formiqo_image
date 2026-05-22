@@ -49,7 +49,20 @@ TEXT_LIKE_GROUNDING_TYPES: frozenset[str] = frozenset(
 
 TOGGLE_GROUNDING_TYPES: frozenset[str] = frozenset({"checkbox", "radio"})
 
+# Types emitted by the LLM grounding prompt (mapped before validation).
+LLM_GROUNDING_TYPE_ALIASES: dict[str, str] = {
+    "textarea": "multiline_text",
+    "table_cell": "text",
+}
+
 _CHECK_MARK_CHARS = frozenset({"\u2713", "\u2714"})
+
+
+def normalize_llm_field_type(field_type: str) -> str:
+    """Map LLM field type strings to canonical grounding types."""
+    if field_type in ALLOWED_AI_GROUNDING_FIELD_TYPES:
+        return field_type
+    return LLM_GROUNDING_TYPE_ALIASES.get(field_type, field_type)
 
 
 def allowed_ai_types_sorted_join(*, sep: str = ", ") -> str:

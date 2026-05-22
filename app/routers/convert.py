@@ -37,7 +37,7 @@ from app.services.stamping_config import (
 
 LOG = logging.getLogger(__name__)
 
-router = APIRouter(tags=["conversion"])
+router = APIRouter()
 
 
 def _http_load_field_grounding_manifest(output_dir: Path) -> dict[str, Any]:
@@ -83,6 +83,7 @@ def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_p
 @router.post(
     "/user-uploads/process-convert-line-detect",
     response_model=ProcessUserUploadsConvertLineDetectResponse,
+    tags=["grounding"],
     summary=(
         "PDF inbox → rasterize each PDF and run OpenCV line detection (primary entry; no LLM). "
         "Use returned job_id with POST /jobs/{job_id}/ground-fields-from-lines next."
@@ -137,6 +138,7 @@ async def process_user_uploads_convert_line_detect(
 @router.post(
     "/jobs/{job_id}/stamp-images",
     response_model=StampImagesResponse,
+    tags=["conversion"],
     summary="Stamp values onto images (provider in JSON body; must match grounding manifest)",
     responses={
         400: {"description": "Invalid job, missing converted images, or missing grounding run"},
@@ -214,6 +216,7 @@ async def _stamp_images_for_provider(
 @router.post(
     "/jobs/{job_id}/stamp-pdf",
     response_model=StampPdfResponse,
+    tags=["conversion"],
     summary="Stamp values onto original PDF (provider in JSON body; must match grounding manifest)",
     responses={
         400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
