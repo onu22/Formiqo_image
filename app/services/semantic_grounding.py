@@ -27,6 +27,7 @@ from app.services.grounding_prompt import (
     configure_prompt_dir,
 )
 from app.services.line_detection_job import list_converted_page_pngs
+from app.services.stamping_config import write_stamping_json_sample
 
 LOG = logging.getLogger(__name__)
 
@@ -513,12 +514,7 @@ def write_field_grounding_outputs(
     manifest_path = fg_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-    stamping_path = fg_dir / "stamping.json"
-    if not stamping_path.is_file():
-        stamping_path.write_text(
-            json.dumps({"values": {}, "require_all_values": False}, indent=2) + "\n",
-            encoding="utf-8",
-        )
+    write_stamping_json_sample(fg_dir)
 
     return {
         "job_id": job_id,
