@@ -7,6 +7,7 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from app.api_tags import TAG_LOCATE_FIELDS
 from app.config import Settings
 from app.dependencies import get_settings
 from app.schemas import (
@@ -20,13 +21,13 @@ from app.services.semantic_grounding import SemanticGroundingJobError, run_seman
 
 LOG = logging.getLogger(__name__)
 
-router = APIRouter(tags=["grounding"])
+router = APIRouter(tags=[TAG_LOCATE_FIELDS])
 
 
 @router.post(
     "/jobs/{job_id}/ground-fields-from-lines",
     response_model=GroundFieldsFromLinesResponse,
-    summary="Ground all converted pages with OpenAI using line map + page images (geometry from OpenCV)",
+    summary="Use AI to find text fields, checkboxes, and radio buttons on every page",
     responses={
         400: {"description": "Invalid job, missing conversion/line detection, or bad request"},
         404: {"description": "Job not found"},

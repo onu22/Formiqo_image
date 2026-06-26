@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api_tags import OPENAPI_TAGS
 from app.dependencies import get_settings
 from app.routers import convert, grounding
 
@@ -38,9 +39,12 @@ def create_app() -> FastAPI:
         title=settings.api_title,
         version=settings.api_version,
         lifespan=lifespan,
+        openapi_tags=OPENAPI_TAGS,
         description=(
-            "Rasterize PDFs, detect form lines with OpenCV, ground fields with OpenAI using "
-            "the line map, and optionally stamp values onto images or PDFs. OpenAPI at `/docs`."
+            "Fill PDF forms in three steps (use the Swagger sections in order):\n\n"
+            "1. **Prepare PDF** — convert pages to images and detect printed lines\n"
+            "2. **Locate form fields** — AI finds where each value should go\n"
+            "3. **Fill & export** — write your values to preview images or the final PDF"
         ),
     )
 
@@ -54,8 +58,9 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    application.include_router(convert.router, prefix="/api/v1")
+    application.include_router(convert.ingest_router, prefix="/api/v1")
     application.include_router(grounding.router, prefix="/api/v1")
+    application.include_router(convert.stamp_router, prefix="/api/v1")
 
     @application.get("/", include_in_schema=False)
     def root() -> dict[str, str]:
