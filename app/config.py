@@ -7,13 +7,15 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     """Runtime settings loaded from environment or ``.env``."""
 
     model_config = SettingsConfigDict(
         env_prefix="FORMIQO_",
-        env_file=".env",
+        env_file=_PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
