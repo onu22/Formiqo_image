@@ -28,17 +28,11 @@ htmlcov/
 .env.*
 !.env.example
 
-# Local API output (track sample jobs; keep uploads local)
-data/*
-!data/jobs/
-!data/jobs/**
-data/user-uploads/
+# Local API output (job artifacts, uploads — not committed)
+data/
 
-# PDFs (allow committed job fixtures under data/jobs)
+# PDFs
 *.pdf
-!data/jobs/
-!data/jobs/**
-!data/jobs/**/*.pdf
 
 # OS / editors
 .DS_Store
