@@ -27,6 +27,7 @@ htmlcov/
 .env
 .env.*
 !.env.example
+certs/
 
 # Local API output (job artifacts, uploads — not committed)
 data/
