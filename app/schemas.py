@@ -104,7 +104,7 @@ class StampProviderRequest(BaseModel):
     """JSON body for ``POST .../stamp-images`` and ``POST .../stamp-pdf``."""
 
     provider: Literal["openai", "anthropic"] = Field(
-        default="anthropic",
+        default="openai",
         description="Must match field_grounding/manifest.json provider.",
     )
 
@@ -252,11 +252,11 @@ class GroundFieldsFromLinesRequest(BaseModel):
         default="openai",
         description="Vision provider for field grounding.",
     )
-    model: str | None = Field(
-        default=None,
+    model: str = Field(
+        default="gpt-5.5",
         description=(
-            "Vision model id; omit for defaults (openai: gpt-5.5, anthropic: claude-opus-4-7) "
-            "or env FORMIQO_GROUNDING_MODEL / FORMIQO_COMBINED_DEFAULT_*."
+            "Vision model id; defaults to gpt-5.5 for openai and claude-opus-4-7 for anthropic "
+            "when omitted, or use env FORMIQO_GROUNDING_MODEL / FORMIQO_COMBINED_DEFAULT_*."
         ),
     )
 
@@ -265,11 +265,13 @@ class GroundFieldsFromLinesRequest(BaseModel):
     def _apply_provider_model_defaults(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
+        data = dict(data)
         prov = str(data.get("provider") or "openai").strip().lower()
         model = data.get("model")
         if model is None or (isinstance(model, str) and not model.strip()):
-            data = dict(data)
             data["model"] = "claude-opus-4-7" if prov == "anthropic" else "gpt-5.5"
+        elif prov == "anthropic" and model == "gpt-5.5":
+            data["model"] = "claude-opus-4-7"
         return data
 
 
