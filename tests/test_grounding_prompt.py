@@ -58,6 +58,57 @@ def test_openai_messages_use_highlighted_image(tmp_path: Path) -> None:
     assert "detected_lines.json:\n" not in user[0]["text"]
 
 
+def test_user_bundle_includes_label_anchors_when_present() -> None:
+    detected = {"image": {"width": 100, "height": 100}, "lines": []}
+    manifest = {"page_index": 0, "image": {"saved_image_width_px": 100, "saved_image_height_px": 100}}
+    anchors = [{"text": "Full Name", "bbox": {"x": 10, "y": 20, "w": 80, "h": 12}}]
+    text = build_user_text_bundle(
+        detected_lines=detected,
+        page_manifest=manifest,
+        label_anchors=anchors,
+    )
+    assert "label_anchors_json:" in text
+    start = text.index("label_anchors_json:\n") + len("label_anchors_json:\n")
+    payload = json.loads(text[start:].split("\n\n")[0])
+    assert payload[0]["text"] == "Full Name"
+
+
+def test_user_bundle_omits_label_anchors_when_absent() -> None:
+    text = build_user_text_bundle(
+        detected_lines={"lines": []},
+        page_manifest={"page_index": 0},
+    )
+    assert "label_anchors_json:" not in text
+
+
+def test_developer_prompt_documents_anchor_contract() -> None:
+    dev = load_grounding_developer_prompt()
+    assert "anchor" in dev.lower()
+    for kind in ("cell", "line_anchor", "label_anchor"):
+        assert kind in dev
+
+
+def test_adapt_grounding_response_preserves_anchor() -> None:
+    raw = {
+        "page_index": 0,
+        "width": 100,
+        "height": 100,
+        "fields": [
+            {
+                "field_id": "name",
+                "type": "text",
+                "bbox": {"x": 1, "y": 2, "w": 3, "h": 4},
+                "confidence": 0.9,
+                "anchor": {"kind": "cell", "line_ids": ["line_h_001", "line_v_001"]},
+                "evidence": {"label": "Name", "line_ids": ["line_h_001"]},
+            }
+        ],
+    }
+    out = adapt_grounding_response(raw)
+    assert out["fields"][0]["anchor"]["kind"] == "cell"
+    assert out["fields"][0]["anchor"]["line_ids"] == ["line_h_001", "line_v_001"]
+
+
 def test_adapt_grounding_response_maps_llm_schema() -> None:
     raw = {
         "page_index": 0,

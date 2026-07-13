@@ -17,9 +17,10 @@ _COMPACT_JSON_SUFFIX = (
 )
 
 _ATTACHMENT_MANIFEST = """Attachments for this page (in order):
-1. highlighted_line_image — PNG with line overlay
+1. highlighted_line_image — PNG with line overlay (may include a labeled coordinate grid)
 2. line_detection_json — slim line index (line_id, orientation, bbox per line)
 3. page_metadata_json — authoritative page_index, width, height, unit, origin
+4. label_anchors_json — printed labels with pixel bbox (present only for digital PDFs)
 """
 
 
@@ -128,6 +129,7 @@ def build_user_text_bundle(
     compact_json: bool = False,
     include_attachment_manifest: bool = True,
     slim_line_detection: bool = True,
+    label_anchors: list[dict[str, Any]] | None = None,
 ) -> str:
     parts: list[str] = []
     manifest = build_attachment_manifest(include_manifest=include_attachment_manifest)
@@ -138,6 +140,8 @@ def build_user_text_bundle(
     line_payload = line_detection_payload_for_prompt(detected_lines, slim=slim_line_detection)
     parts.append("line_detection_json:\n" + _compact_json(line_payload))
     parts.append("page_metadata_json:\n" + _compact_json(page_manifest))
+    if label_anchors:
+        parts.append("label_anchors_json:\n" + _compact_json(label_anchors))
     if compact_json:
         parts.append(_COMPACT_JSON_SUFFIX)
     return "\n\n".join(parts)
@@ -181,6 +185,7 @@ def _openai_user_content(
     compact_json: bool = False,
     include_attachment_manifest: bool = True,
     slim_line_detection: bool = True,
+    label_anchors: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     user_text = build_user_text_bundle(
         detected_lines=detected_lines,
@@ -188,6 +193,7 @@ def _openai_user_content(
         compact_json=compact_json,
         include_attachment_manifest=include_attachment_manifest,
         slim_line_detection=slim_line_detection,
+        label_anchors=label_anchors,
     )
     return [
         {"type": "text", "text": user_text},
@@ -203,6 +209,7 @@ def build_openai_messages(
     compact_json: bool = False,
     include_attachment_manifest: bool = True,
     slim_line_detection: bool = True,
+    label_anchors: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Chat Completions messages with system + developer + multimodal user."""
     return [
@@ -217,6 +224,7 @@ def build_openai_messages(
                 compact_json=compact_json,
                 include_attachment_manifest=include_attachment_manifest,
                 slim_line_detection=slim_line_detection,
+                label_anchors=label_anchors,
             ),
         },
     ]
@@ -230,6 +238,7 @@ def build_anthropic_messages(
     compact_json: bool = False,
     include_attachment_manifest: bool = True,
     slim_line_detection: bool = True,
+    label_anchors: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Return ``(system_text, user_content_blocks)`` for Anthropic Messages API."""
     system_text = (
@@ -246,6 +255,7 @@ def build_anthropic_messages(
                 compact_json=compact_json,
                 include_attachment_manifest=include_attachment_manifest,
                 slim_line_detection=slim_line_detection,
+                label_anchors=label_anchors,
             ),
         },
         _anthropic_image_block(highlighted_png),

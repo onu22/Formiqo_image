@@ -256,6 +256,285 @@ def find_writable_band(
     return None
 
 
+def _verticals_from_geometry(geometry: dict[str, Any]) -> list[dict[str, int]]:
+    out: list[dict[str, int]] = []
+    for ln in (geometry.get("lines_by_id") or {}).values():
+        if not isinstance(ln, dict) or ln.get("orientation") != "vertical":
+            continue
+        bbox = ln.get("bbox")
+        if not isinstance(bbox, dict):
+            continue
+        try:
+            out.append({k: int(bbox[k]) for k in ("x", "y", "w", "h")})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def find_band_for_y(cy: float, bands: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Smallest writable band whose vertical extent contains ``cy``."""
+    best: dict[str, Any] | None = None
+    best_h = -1
+    for band in bands:
+        try:
+            y_min = int(band["y_min"])
+            y_max = int(band["y_max"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if y_min <= cy <= y_max:
+            h = y_max - y_min
+            if best is None or h < best_h:
+                best = band
+                best_h = h
+    return best
+
+
+def normalize_label_text(text: Any) -> str:
+    if not isinstance(text, str):
+        return ""
+    cleaned = text.strip().lower().rstrip(":").strip()
+    return " ".join(cleaned.split())
+
+
+def find_cell_by_line_ids(
+    line_ids: list[str],
+    cells: list[dict[str, Any]],
+    *,
+    min_matches: int = 2,
+) -> dict[str, Any] | None:
+    """Cell sharing the most bounding lines with ``line_ids`` (ties → smallest area)."""
+    wanted = {lid for lid in line_ids if isinstance(lid, str) and lid}
+    if not wanted:
+        return None
+    best: dict[str, Any] | None = None
+    best_score = 0
+    best_area = -1
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        bounding = {lid for lid in (cell.get("bounding_lines") or []) if isinstance(lid, str)}
+        score = len(bounding & wanted)
+        if score < min_matches:
+            continue
+        cbb = cell.get("bbox")
+        if not isinstance(cbb, dict):
+            continue
+        area = int(cbb.get("w", 0)) * int(cbb.get("h", 0))
+        if score > best_score or (score == best_score and (best_area < 0 or area < best_area)):
+            best = cell
+            best_score = score
+            best_area = area
+    return best
+
+
+def find_band_by_line_id(
+    line_ids: list[str],
+    bands: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Writable band whose bounding horizontal lines include any of ``line_ids``."""
+    wanted = {lid for lid in line_ids if isinstance(lid, str) and lid}
+    if not wanted:
+        return None
+    for band in bands:
+        between = {lid for lid in (band.get("between_lines") or []) if isinstance(lid, str)}
+        if between & wanted:
+            return band
+    return None
+
+
+def match_label_anchor(
+    label: Any,
+    anchors: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Best label-anchor match: exact normalized text, then prefix/substring."""
+    target = normalize_label_text(label)
+    if not target or not anchors:
+        return None
+    exact: dict[str, Any] | None = None
+    partial: dict[str, Any] | None = None
+    partial_delta = 1 << 30
+    for anchor in anchors:
+        norm = normalize_label_text(anchor.get("text"))
+        if not norm:
+            continue
+        if norm == target:
+            if exact is None:
+                exact = anchor
+            continue
+        if target in norm or norm in target:
+            delta = abs(len(norm) - len(target))
+            if delta < partial_delta:
+                partial = anchor
+                partial_delta = delta
+    return exact or partial
+
+
+def bbox_from_label_anchor(
+    label_bbox: dict[str, int],
+    relation: Any,
+    geometry: dict[str, Any],
+    *,
+    page_w: int,
+    page_h: int,
+    stamp_inset_px: int,
+    gap_px: int = 6,
+    default_w: int = 300,
+) -> dict[str, int]:
+    """Deterministic writable bbox positioned relative to a printed label anchor."""
+    lx = int(label_bbox["x"])
+    ly = int(label_bbox["y"])
+    lw = int(label_bbox["w"])
+    lh = int(label_bbox["h"])
+    rel = relation if isinstance(relation, str) else "right_of"
+    bands = geometry.get("writable_bands") or []
+    verticals = _verticals_from_geometry(geometry)
+    cy = ly + lh / 2.0
+
+    if rel == "below":
+        band = min(
+            (b for b in bands if int(b.get("y_min", -1)) >= ly + lh),
+            key=lambda b: int(b["y_min"]),
+            default=None,
+        )
+    elif rel == "above":
+        band = max(
+            (b for b in bands if int(b.get("y_max", 1 << 30)) <= ly),
+            key=lambda b: int(b["y_max"]),
+            default=None,
+        )
+    else:
+        band = find_band_for_y(cy, bands)
+
+    if band is not None:
+        y0 = int(band["y_min"])
+        h = int(band["y_max"]) - y0
+        band_x_min = int(band["x_min"])
+        band_x_max = int(band["x_max"])
+    else:
+        y0 = ly if rel not in ("below",) else ly + lh
+        h = lh
+        band_x_min = 0
+        band_x_max = page_w
+
+    if rel in ("right_of", "on_line") or rel is None:
+        x0 = lx + lw + gap_px
+        right_edges = [v["x"] for v in verticals if v["x"] > x0]
+        x1 = min(right_edges) if right_edges else min(band_x_max, x0 + default_w)
+    elif rel == "left_of":
+        x1 = max(lx - gap_px, 0)
+        left_edges = [v["x"] + v["w"] for v in verticals if v["x"] + v["w"] < x1]
+        x0 = max(left_edges) if left_edges else max(band_x_min, x1 - default_w)
+    else:  # below / above → align under/over the label
+        x0 = lx
+        x1 = min(x0 + max(lw, default_w), band_x_max if band is not None else page_w)
+
+    w = max(1, int(x1) - int(x0))
+    bbox = {"x": int(x0), "y": int(y0), "w": w, "h": max(1, int(h))}
+    return inset_bbox(bbox, stamp_inset_px, page_w=page_w, page_h=page_h)
+
+
+def resolve_anchor_bbox(
+    field: dict[str, Any],
+    geometry: dict[str, Any],
+    label_anchors: list[dict[str, Any]],
+    *,
+    page_w: int,
+    page_h: int,
+    stamp_inset_px: int,
+) -> tuple[dict[str, int], str, list[str]] | None:
+    """Resolve a field's deterministic bbox from its declared anchor.
+
+    Returns ``(bbox, grounding_source, supporting_line_ids)`` or ``None`` when the anchor is
+    absent/unresolvable (caller falls back to geometry snapping or the pixel estimate).
+    """
+    anchor = field.get("anchor")
+    if not isinstance(anchor, dict):
+        return None
+    kind = anchor.get("kind")
+    raw_ids = anchor.get("line_ids")
+    line_ids = [lid for lid in raw_ids if isinstance(lid, str) and lid] if isinstance(raw_ids, list) else []
+    cells = geometry.get("cells") or []
+    bands = geometry.get("writable_bands") or []
+
+    if kind == "cell":
+        cell = find_cell_by_line_ids(line_ids, cells)
+        if cell is not None and isinstance(cell.get("bbox"), dict):
+            snapped = {k: int(cell["bbox"][k]) for k in ("x", "y", "w", "h")}
+            bbox = inset_bbox(snapped, stamp_inset_px, page_w=page_w, page_h=page_h)
+            lines = [lid for lid in (cell.get("bounding_lines") or []) if isinstance(lid, str)]
+            return bbox, "cell", lines
+
+    if kind == "line_anchor":
+        band = find_band_by_line_id(line_ids, bands)
+        if band is not None:
+            y0 = int(band["y_min"]) + stamp_inset_px
+            h = (int(band["y_max"]) - int(band["y_min"])) - 2 * stamp_inset_px
+            if h < 1:
+                y0 = int(band["y_min"])
+                h = max(1, int(band["y_max"]) - int(band["y_min"]))
+            x0 = int(band["x_min"]) + stamp_inset_px
+            w = max(1, (int(band["x_max"]) - int(band["x_min"])) - 2 * stamp_inset_px)
+            bbox = clamp_bbox_to_page({"x": x0, "y": y0, "w": w, "h": h}, page_w, page_h)
+            lines = [lid for lid in (band.get("between_lines") or []) if isinstance(lid, str)]
+            return bbox, "line_anchor", lines
+
+    if kind == "label_anchor":
+        matched = match_label_anchor(anchor.get("label"), label_anchors)
+        if matched is not None and isinstance(matched.get("bbox"), dict):
+            bbox = bbox_from_label_anchor(
+                matched["bbox"],
+                anchor.get("relation"),
+                geometry,
+                page_w=page_w,
+                page_h=page_h,
+                stamp_inset_px=stamp_inset_px,
+            )
+            return bbox, "label_anchor", []
+
+    return None
+
+
+def apply_anchor_grounding(
+    payload: dict[str, Any],
+    geometry: dict[str, Any],
+    label_anchors: list[dict[str, Any]] | None,
+    *,
+    page_w: int,
+    page_h: int,
+    stamp_inset_px: int,
+) -> dict[str, Any]:
+    """Compute deterministic bboxes for fields carrying resolvable anchors.
+
+    Anchored fields are marked with a transient ``_anchored`` flag so that the subsequent
+    geometry-snapping pass leaves them untouched.
+    """
+    out = copy.deepcopy(payload)
+    fields = out.get("fields")
+    if not isinstance(fields, list):
+        return out
+    anchors = label_anchors or []
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        resolved = resolve_anchor_bbox(
+            field,
+            geometry,
+            anchors,
+            page_w=page_w,
+            page_h=page_h,
+            stamp_inset_px=stamp_inset_px,
+        )
+        if resolved is None:
+            continue
+        bbox, source, lines = resolved
+        field["bbox"] = bbox
+        field["grounding_source"] = source
+        field["_anchored"] = True
+        if lines:
+            _set_supporting_lines(field, lines)
+    return out
+
+
 def clamp_bbox_to_page(bbox: dict[str, int], page_w: int, page_h: int) -> dict[str, int]:
     x = max(0, min(bbox["x"], page_w - 1))
     y = max(0, min(bbox["y"], page_h - 1))
@@ -330,6 +609,12 @@ def normalize_field_bbox(
     if bbox is None:
         return out
 
+    # Fields already resolved from an explicit anchor keep their deterministic bbox and
+    # grounding_source; only re-clamp them to the page.
+    if out.get("_anchored"):
+        out["bbox"] = clamp_bbox_to_page(bbox, page_w, page_h)
+        return out
+
     cells = geometry.get("cells") or []
     bands = geometry.get("writable_bands") or []
     cx, cy = bbox_center(bbox)
@@ -338,6 +623,7 @@ def normalize_field_bbox(
 
     cell = find_containing_cell(cx, cy, cells)
     band = find_writable_band(cx, cy, bands)
+    source = "pixel"
 
     if surface in BOUNDED_SURFACES or (
         surface == "unknown" and ftype in ("text", "numeric", "date", "multiline_text")
@@ -348,6 +634,7 @@ def normalize_field_bbox(
                 snapped = {k: int(cbb[k]) for k in ("x", "y", "w", "h")}
                 snapped = inset_bbox(snapped, stamp_inset_px, page_w=page_w, page_h=page_h)
                 out["bbox"] = snapped
+                source = "cell"
                 _set_supporting_lines(out, cell.get("bounding_lines") or [])
 
     elif surface in TOGGLE_SURFACES or ftype in ("checkbox", "radio"):
@@ -358,6 +645,7 @@ def normalize_field_bbox(
                 if rect["w"] * rect["h"] <= MAX_TOGGLE_AREA or aggressive:
                     inset = 1 if stamp_inset_px > 0 else 0
                     out["bbox"] = inset_bbox(rect, inset, page_w=page_w, page_h=page_h)
+                    source = "cell"
                     _set_supporting_lines(out, cell.get("bounding_lines") or [])
 
     elif surface in LINE_SURFACES:
@@ -389,6 +677,7 @@ def normalize_field_bbox(
                     page_w,
                     page_h,
                 )
+                source = "line_anchor"
                 _set_supporting_lines(out, band.get("between_lines") or [])
 
     elif aggressive and cell is not None:
@@ -396,11 +685,15 @@ def normalize_field_bbox(
         if isinstance(cbb, dict):
             snapped = {k: int(cbb[k]) for k in ("x", "y", "w", "h")}
             out["bbox"] = inset_bbox(snapped, stamp_inset_px, page_w=page_w, page_h=page_h)
+            source = "cell"
             _set_supporting_lines(out, cell.get("bounding_lines") or [])
 
     else:
         out["bbox"] = clamp_bbox_to_page(bbox, page_w, page_h)
 
+    existing_source = out.get("grounding_source")
+    if not (isinstance(existing_source, str) and existing_source):
+        out["grounding_source"] = source
     return out
 
 

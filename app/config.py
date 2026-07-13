@@ -130,3 +130,39 @@ class Settings(BaseSettings):
             "Full detected_lines.json remains on disk for validation."
         ),
     )
+    grounding_max_concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description=(
+            "Max number of pages grounded in parallel (bounded per-page concurrency). "
+            "Per-page errors stay isolated regardless of this value."
+        ),
+    )
+    grounding_structured_outputs: bool = Field(
+        default=True,
+        description=(
+            "Use provider-native structured outputs (OpenAI strict json_schema, Anthropic "
+            "tool-use). Falls back to compact-JSON prompting when disabled or unsupported."
+        ),
+    )
+    grounding_label_anchors: bool = Field(
+        default=True,
+        description=(
+            "For digital (text-layer) PDFs, extract label positions with PyMuPDF and pass them "
+            "as anchors so field bboxes can be computed deterministically."
+        ),
+    )
+    grounding_grid_overlay_enabled: bool = Field(
+        default=False,
+        description=(
+            "Overlay a labeled coordinate grid (ticks every grid_overlay_spacing_px) on the "
+            "page image sent to the model, improving pixel-fallback coordinate accuracy."
+        ),
+    )
+    grounding_grid_overlay_spacing_px: int = Field(
+        default=100,
+        ge=25,
+        le=500,
+        description="Spacing in pixels between labeled coordinate-grid ticks when the overlay is enabled.",
+    )
