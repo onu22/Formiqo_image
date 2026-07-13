@@ -4,6 +4,8 @@
 
 The run-mvp conductor is active on branch `cursor/formiqo-mvp-progress-7c96`.
 
+**Outcome:** HARD_BLOCKED by `harness/RUN-MVP.md` human stop condition: missing LLM provider secrets for live LLM epic validation.
+
 Current gates after this cycle:
 
 - G1 architecture: APPROVED WITH CONDITIONS
@@ -14,12 +16,14 @@ Current gates after this cycle:
 Latest `./scripts/harness-next.sh` result:
 
 ```text
-ACTION=epic
-TARGET=E4
-AGENT=llm-engineer
+ACTION=gate
+TARGET=G4
+AGENT=qa-specialist
 PARALLEL=no
-REASON=E4 grounding accuracy
+REASON=E6 complete — ship review (G4)
 ```
+
+PM did not delegate G4 because the current environment cannot complete the live upload -> grounding -> review validation path without LLM provider keys.
 
 ## Startup commands
 
@@ -49,6 +53,13 @@ Initial next action was E2, with E4 and E6 considered for parallel work. PM laun
 - Delegated G2 to QA Specialist.
   - G2 parity gate signed **QA APPROVED** in `harness/gates/G2-parity.md`.
   - QA report written: `harness/specs/qa-report-g2-parity-2026-07-13.md`.
+- Delegated E4 to LLM Engineer.
+  - Implemented structured OpenAI json_schema and Anthropic tool-use response handling.
+  - Added bounded parallel per-page grounding with per-page error isolation and job manifest progress.
+  - Added anchor-first grounding support (`cell`, `line_anchor`, `label_anchor`, `pixel`) plus PyMuPDF label anchors and coordinate-grid fallback assets.
+  - Persisted `grounding_source` and `confidence` for E5/UI prioritization.
+  - Versioned prompts under `prompts/` and added E4 tests.
+  - Sprint T021/T022 marked DONE and T025 added/DONE.
 
 ## Verification
 
@@ -71,14 +82,40 @@ QA verification for G2:
 - `pytest tests/test_e2_stamping_parity.py -v`: 4 passed.
 - `pytest tests/ -v`: 34 passed, 1 warning.
 
+PM verification after E4:
+
+```bash
+pytest tests/
+```
+
+Result:
+
+- Backend/LLM: 51 passed, 1 Starlette/httpx deprecation warning.
+
 ## Commits and pushes
 
 - `e4afd47` - Implement E2 parity and E6 review UI (pushed to `origin/cursor/formiqo-mvp-progress-7c96`)
+- `579974e` - Approve G2 parity gate (pushed to `origin/cursor/formiqo-mvp-progress-7c96`)
+- `5f181db` - Implement E4 grounding accuracy (pushed to `origin/cursor/formiqo-mvp-progress-7c96`)
 
-Gate and PM summary artifacts are pending the next commit in the conductor loop.
+This PM summary update is pending the final commit in the conductor loop.
 
-## Next action
+## Hard block
 
-Continue immediately with E4 Grounding accuracy via `llm-engineer`.
+`harness/RUN-MVP.md` lists "Missing secret (API key) for LLM epics — document env vars needed" as a human stop condition.
 
-E5 is now unblocked by G2, but per harness priority it waits until E4 is done.
+E4 deterministic/unit-testable work is complete, but the E4 QA note still has two unchecked live-validation items:
+
+- Zero JSON parse failures across the regression set.
+- Live before/after median/p90 bbox center-error numbers.
+
+Required environment variables for a keyed validation run:
+
+- `FORMIQO_OPENAI_API_KEY`
+- `FORMIQO_ANTHROPIC_API_KEY`
+
+Once keys are available, re-trigger `/run-mvp continue`. The conductor should:
+
+1. Run the keyed E4 regression validation and update `harness/specs/e4-grounding-accuracy-note-2026-07-13.md`.
+2. Re-run `./scripts/harness-next.sh`.
+3. If G4 remains next, delegate G4 to QA Specialist for ship review.
