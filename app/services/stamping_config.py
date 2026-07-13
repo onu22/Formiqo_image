@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.schemas import StampImagesStyle as StampImagesStyleSchema
-from app.schemas import StampingJson
-from app.services.image_stamping import StampImageStyle
+from app.schemas import StampingJson, StampStyleSchema
 from app.services.jobs import job_grounding_provider_model
+from app.services.stamping_common import StampStyle
 
 
 def build_stamping_json_sample(field_grounding_dir: Path) -> dict[str, Any]:
@@ -39,7 +38,8 @@ def build_stamping_json_sample(field_grounding_dir: Path) -> dict[str, Any]:
     return {
         "values": values,
         "require_all_values": False,
-        "image_style": StampImagesStyleSchema().model_dump(),
+        "style": StampStyleSchema().model_dump(),
+        "overrides": {},
     }
 
 
@@ -70,14 +70,14 @@ def load_stamping_json_parsed(output_dir: Path) -> StampingJson:
     return StampingJson.model_validate(raw)
 
 
-def stamping_json_to_image_style(stamping: StampingJson) -> StampImageStyle:
-    sch = stamping.image_style
-    if sch is None:
-        sch = StampImagesStyleSchema()
-    return StampImageStyle(
-        font_size_px=sch.font_size_px,
-        font_color=sch.font_color,
-        padding_px=sch.padding_px,
-        draw_debug_boxes=sch.draw_debug_boxes,
-        debug_box_color=sch.debug_box_color,
+def stamping_style(stamping: StampingJson) -> StampStyle:
+    """Convert the persisted (PDF-point) style schema into the internal render style."""
+    return StampStyle(
+        font_size_pt=stamping.style.font_size_pt,
+        text_color=stamping.style.text_color,
     )
+
+
+def stamping_overrides(stamping: StampingJson) -> dict[str, Any]:
+    """Flatten ``stamping.json.overrides`` into plain dicts for the stampers."""
+    return {field_id: override.model_dump() for field_id, override in stamping.overrides.items()}

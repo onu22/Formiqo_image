@@ -51,11 +51,12 @@ from app.services.jobs import (
     read_job_manifest,
     write_job_manifest,
 )
-from app.services.pdf_stamping import StampPdfStyle, run_pdf_stamping_for_job
+from app.services.pdf_stamping import run_pdf_stamping_for_job
 from app.services.stamping_config import (
     load_job_grounding_info,
     load_stamping_json_parsed,
-    stamping_json_to_image_style,
+    stamping_overrides,
+    stamping_style,
 )
 
 LOG = logging.getLogger(__name__)
@@ -248,7 +249,8 @@ async def stamp_images(job_id: str, settings: Settings = Depends(get_settings)) 
         raise ApiHttpError(400, "grounding_not_found", "Job grounding metadata not found") from exc
 
     stamping = _load_stamping(output_dir)
-    style = stamping_json_to_image_style(stamping)
+    style = stamping_style(stamping)
+    overrides = stamping_overrides(stamping)
 
     try:
         result = await asyncio.to_thread(
@@ -259,6 +261,7 @@ async def stamp_images(job_id: str, settings: Settings = Depends(get_settings)) 
             model=model,
             values=stamping.values,
             style=style,
+            overrides=overrides,
             require_all_values=stamping.require_all_values,
         )
     except FileNotFoundError as exc:
@@ -296,6 +299,8 @@ async def stamp_pdf(job_id: str, settings: Settings = Depends(get_settings)) -> 
         raise ApiHttpError(400, "grounding_not_found", "Job grounding metadata not found") from exc
 
     stamping = _load_stamping(output_dir)
+    style = stamping_style(stamping)
+    overrides = stamping_overrides(stamping)
 
     try:
         result = await asyncio.to_thread(
@@ -306,7 +311,8 @@ async def stamp_pdf(job_id: str, settings: Settings = Depends(get_settings)) -> 
             provider=provider,
             model=model,
             values=stamping.values,
-            style=StampPdfStyle(),
+            style=style,
+            overrides=overrides,
             require_all_values=stamping.require_all_values,
         )
     except FileNotFoundError as exc:

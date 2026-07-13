@@ -136,7 +136,16 @@ def _log_grounding_llm_usage(
         LOG.info(msg, *args)
 
 
+_DEFAULT_ANTHROPIC_GROUNDING_MODEL = "claude-opus-4-7"
+
+
 def resolve_grounding_model(*, provider: str, model: str | None, settings: Settings) -> tuple[str, str]:
+    """Resolve the grounding model string, falling back to per-provider defaults.
+
+    ``FORMIQO_GROUNDING_MODEL`` (``settings.grounding_model``) is the single configurable
+    default, used for provider=openai; anthropic has no equivalent settings knob (its
+    default is fixed here, matching the request-schema fallback in ``app.schemas``).
+    """
     prov = provider.strip().lower()
     if prov not in _SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider {provider!r}; use openai or anthropic.")
@@ -146,15 +155,9 @@ def resolve_grounding_model(*, provider: str, model: str | None, settings: Setti
         return prov, raw
 
     if prov == "anthropic":
-        resolved = settings.combined_default_anthropic_model.strip()
-        if not resolved:
-            raise ValueError(
-                "Resolved Anthropic model is empty; set model in request or "
-                "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL."
-            )
-        return prov, resolved
+        return prov, _DEFAULT_ANTHROPIC_GROUNDING_MODEL
 
-    resolved = settings.grounding_model.strip() or settings.combined_default_openai_model.strip()
+    resolved = settings.grounding_model.strip()
     if not resolved:
         raise ValueError(
             "Resolved OpenAI model is empty; set model in request or FORMIQO_GROUNDING_MODEL."
@@ -298,8 +301,6 @@ def _call_grounding_llm_raw(
         timeout_seconds=settings.anthropic_timeout_seconds,
         max_tokens=settings.grounding_anthropic_max_tokens,
     )
-
-    raise ValueError(f"Unsupported provider: {provider}")
 
 
 def _fetch_grounding_payload(

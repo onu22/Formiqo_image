@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.schemas import StampImagesStyle, StampingJson
+from app.schemas import StampingJson, StampStyleSchema
 from app.services.jobs import grounding_page_px, page_manifest_image_px, resolve_under_output_dir
 
 _PAGE_FIELDS_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
@@ -28,10 +28,8 @@ def _page_number_from_filename(name: str) -> int:
 
 
 def _style_projection(stamping: StampingJson) -> dict[str, Any]:
-    img = stamping.image_style or StampImagesStyle()
-    # Best-effort until E2 unified PDF-point style model.
-    font_size_pt = max(1, round(img.font_size_px * 72.0 / 200.0))
-    return {"font_size_pt": font_size_pt, "text_color": img.font_color}
+    """``style`` reads directly from ``stamping.json`` (PDF points) after E2."""
+    return {"font_size_pt": stamping.style.font_size_pt, "text_color": stamping.style.text_color}
 
 
 def load_fields_payload(*, job_id: str, output_dir: Path) -> dict[str, Any]:
@@ -153,13 +151,9 @@ def patch_values(
         stamping.values = merged
 
     if style is not None:
-        from app.http_errors import ApiHttpError
-
-        raise ApiHttpError(
-            501,
-            "not_implemented",
-            "Global style PATCH is not implemented until E2 stamping unification.",
-        )
+        current = stamping.style.model_dump()
+        current.update({k: v for k, v in style.items() if k in current})
+        stamping.style = StampStyleSchema.model_validate(current)
 
     path.write_text(json.dumps(stamping.model_dump(), indent=2) + "\n", encoding="utf-8")
     return {"values": stamping.values, "style": _style_projection(stamping)}

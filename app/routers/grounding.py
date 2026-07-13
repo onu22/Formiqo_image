@@ -16,7 +16,7 @@ from app.schemas import (
     SemanticGroundingPageResult,
 )
 from app.services.jobs import job_paths
-from app.services.line_detection_job import NO_CONVERTED_PAGE_PNGS, list_converted_page_pngs
+from app.services.line_detection_job import list_converted_page_pngs
 from app.services.semantic_grounding import SemanticGroundingJobError, run_semantic_grounding_for_job
 
 LOG = logging.getLogger(__name__)
@@ -83,8 +83,6 @@ async def ground_fields_from_lines(
             model=body.model,
         )
     except ValueError as exc:
-        if str(exc) == NO_CONVERTED_PAGE_PNGS:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SemanticGroundingJobError as exc:
         failed_models = [SemanticGroundingPageResult.model_validate(p) for p in exc.failed_pages]
