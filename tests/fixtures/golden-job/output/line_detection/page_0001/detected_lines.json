@@ -1,0 +1,33 @@
+{
+  "image": {
+    "path": "converted_images/page_0001.png",
+    "width_px": 1700,
+    "height_px": 2200,
+    "origin": "top-left"
+  },
+  "detector": {
+    "method": "opencv_morphology",
+    "config": {}
+  },
+  "counts": {
+    "horizontal": 1,
+    "vertical": 1,
+    "total": 2
+  },
+  "lines": [
+    {
+      "line_id": "line_h_008",
+      "orientation": "horizontal",
+      "bbox": { "x": 90, "y": 220, "w": 320, "h": 2 },
+      "thickness": 2,
+      "line_style": "solid"
+    },
+    {
+      "line_id": "line_v_001",
+      "orientation": "vertical",
+      "bbox": { "x": 90, "y": 190, "w": 2, "h": 40 },
+      "thickness": 2,
+      "line_style": "solid"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+---
+description: Formiqo multi-agent harness — gates, epics, PM routing. Read before epic or multi-agent work.
+alwaysApply: true
+---
+
+# Formiqo MVP Harness
+
+This repo uses a **static multi-agent harness** to deliver [`docs/PRD.md`](docs/PRD.md).
+
+## Before multi-epic or gate work
+
+1. [`AGENTS.md`](AGENTS.md) — roles and governance
+2. [`harness/OPERATING-MODEL.md`](harness/OPERATING-MODEL.md) — gates and pipeline
+3. [`harness/sprints/CURRENT`](harness/sprints/CURRENT) — active backlog
+4. [`harness/gates/`](harness/gates/) — stop-the-line status
+
+## Commands
+
+- **`/run-mvp`** — autonomous conductor to MVP ship (sit and wait)
+- `/pm` — PM orchestration
+- `/epic E1` — run one epic with correct role
+- `/gate G1` — quality gate review
+- `/sprint-plan` — sprint planning
+
+## Rules
+
+- **G1 APPROVED** before E1 implementation
+- **G2 QA APPROVED** before E5
+- **G3 APPROVED** before E6 live API integration
+- **G4 QA APPROVED** before MVP ship
+- Coordinate system: top-left pixel bboxes on 200 DPI PNGs (PRD §2.2)

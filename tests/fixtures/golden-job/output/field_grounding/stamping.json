@@ -1,0 +1,13 @@
+{
+  "values": {
+    "field_001": ""
+  },
+  "require_all_values": false,
+  "image_style": {
+    "font_size_px": 22,
+    "font_color": "#111111",
+    "padding_px": 3,
+    "draw_debug_boxes": false,
+    "debug_box_color": "#ff0000"
+  }
+}

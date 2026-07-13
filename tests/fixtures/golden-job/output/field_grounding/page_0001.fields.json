@@ -1,0 +1,24 @@
+{
+  "page_index": 0,
+  "width_px": 1700,
+  "height_px": 2200,
+  "unit": "px",
+  "origin": "top-left",
+  "fields": [
+    {
+      "field_id": "field_001",
+      "type": "text",
+      "bbox": { "x": 100, "y": 200, "w": 300, "h": 24 },
+      "confidence": 0.95,
+      "label": "Full Name",
+      "evidence": {
+        "line_ids": ["line_h_008", "line_v_001"]
+      },
+      "grounding_type": "text",
+      "grounding_source": null,
+      "qa_status": null,
+      "reviewed": false,
+      "font_size_pt": null
+    }
+  ]
+}

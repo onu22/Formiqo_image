@@ -11,6 +11,93 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
+class ApiErrorBody(BaseModel):
+    error: str
+    message: str
+
+
+class CreateJobResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class JobListItem(BaseModel):
+    job_id: str
+    source_filename: str
+    page_count: int
+    status: str
+    created_at: str
+
+
+class JobListResponse(BaseModel):
+    jobs: list[JobListItem]
+
+
+class JobDetailResponse(BaseModel):
+    job_id: str
+    source_filename: str | None = None
+    status: str
+    page_count: int
+    stages: dict[str, Any] = Field(default_factory=dict)
+    errors: list[Any] = Field(default_factory=list)
+    artifacts: dict[str, bool] = Field(default_factory=dict)
+
+
+class FieldsPagePayload(BaseModel):
+    page_number: int
+    width_px: int
+    height_px: int
+    fields: list[dict[str, Any]]
+
+
+class FieldsResponse(BaseModel):
+    job_id: str
+    style: dict[str, Any]
+    pages: list[FieldsPagePayload]
+    values: dict[str, str]
+
+
+class FieldPatchItem(BaseModel):
+    field_id: str
+    page_number: int = Field(ge=1)
+    bbox: dict[str, Any] | None = None
+    font_size_pt: float | None = None
+    reviewed: bool | None = None
+
+
+class PatchFieldsRequest(BaseModel):
+    fields: list[FieldPatchItem]
+
+
+class PatchFieldsResponse(BaseModel):
+    fields: list[dict[str, Any]]
+
+
+class PatchValuesRequest(BaseModel):
+    values: dict[str, str] | None = None
+    style: dict[str, Any] | None = None
+
+
+class PatchValuesResponse(BaseModel):
+    values: dict[str, str]
+    style: dict[str, Any]
+
+
+class StampRunPageItem(BaseModel):
+    page_number: int
+    image_url: str
+
+
+class StampImagesRunResponse(BaseModel):
+    run_id: str
+    pages: list[StampRunPageItem]
+
+
+class StampPdfRunResponse(BaseModel):
+    run_id: str
+    download_url: str
+
+
 class FormLineDetectorConfig(BaseModel):
     """Optional OpenCV overrides for ``POST /user-uploads/process-convert-line-detect`` body ``config``."""
 
@@ -105,7 +192,7 @@ class StampProviderRequest(BaseModel):
 
     provider: Literal["openai", "anthropic"] = Field(
         default="openai",
-        description="Must match field_grounding/manifest.json provider.",
+        description="Must match job.json grounding.provider.",
     )
 
 

@@ -1,16 +1,13 @@
-"""User-upload batch processing and job stamping routes."""
+"""User-upload batch processing routes (legacy CLI intake)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
-from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import ValidationError
+from fastapi import APIRouter, Body, Depends
 
-from app.api_tags import TAG_FILL_EXPORT, TAG_PREPARE_PDF
+from app.api_tags import TAG_PREPARE_PDF
 from app.config import Settings
 from app.dependencies import get_settings
 from app.schemas import (
@@ -18,76 +15,22 @@ from app.schemas import (
     FormLineDetectionJobResponse,
     FormLineDetectorConfig,
     ProcessUserUploadsConvertLineDetectResponse,
-    StampImagesResponse,
-    StampProviderRequest,
-    StampPdfResponse,
-    StampingJson,
     UserUploadConvertLineDetectItem,
     UserUploadsConvertLineDetectRequest,
 )
 from app.services.pdf_pipeline import scan_convert_and_detect_lines_user_uploads
-from app.services.image_stamping import run_image_stamping_for_job
-from app.services.jobs import job_paths
-from app.services.pdf_stamping import StampPdfStyle, run_pdf_stamping_for_job
-from app.services.stamping_config import (
-    load_field_grounding_manifest,
-    load_stamping_json_parsed,
-    manifest_provider_model,
-    stamping_json_to_image_style,
-)
 
 LOG = logging.getLogger(__name__)
 
 ingest_router = APIRouter(tags=[TAG_PREPARE_PDF])
-stamp_router = APIRouter(tags=[TAG_FILL_EXPORT])
-
-
-def _http_load_field_grounding_manifest(output_dir: Path) -> dict[str, Any]:
-    try:
-        return load_field_grounding_manifest(output_dir)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _http_load_stamping_json(output_dir: Path) -> StampingJson:
-    try:
-        return load_stamping_json_parsed(output_dir)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "Invalid field_grounding/stamping.json", "errors": exc.errors()},
-        ) from exc
-
-
-def _manifest_provider_must_match_route_or_400(manifest: dict[str, Any], route_provider: str) -> tuple[str, str]:
-    try:
-        prov, model = manifest_provider_model(manifest)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    want = route_provider.strip().lower()
-    if prov != want:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Grounding manifest provider is {prov!r}; POST .../stamp-images or .../stamp-pdf "
-                f'with JSON {{"provider":"{prov}"}}, not provider={want!r}.'
-            ),
-        )
-    return prov, model
 
 
 @ingest_router.post(
     "/user-uploads/process-convert-line-detect",
     response_model=ProcessUserUploadsConvertLineDetectResponse,
     summary=(
-        "Convert uploaded PDFs to page images and detect printed lines (no AI). "
-        "Use the returned job_id in step 2."
+        "[Legacy] Convert uploaded PDFs to page images and detect printed lines (no AI). "
+        "Prefer POST /jobs for the UI pipeline."
     ),
     responses={
         200: {"description": "Per-PDF summary; jobs remain under the jobs directory for inspection"},
@@ -134,160 +77,3 @@ async def process_user_uploads_convert_line_detect(
             )
         )
     return ProcessUserUploadsConvertLineDetectResponse(processed=items)
-
-
-@stamp_router.post(
-    "/jobs/{job_id}/stamp-images",
-    response_model=StampImagesResponse,
-    summary="Fill page image previews with values from stamping.json",
-    responses={
-        400: {"description": "Invalid job, missing converted images, or missing grounding run"},
-        404: {"description": "Job not found"},
-        422: {"description": "No pages succeeded image stamping"},
-    },
-)
-async def stamp_images_for_job(
-    job_id: str,
-    body: StampProviderRequest = Body(default_factory=StampProviderRequest),
-    settings: Settings = Depends(get_settings),
-) -> StampImagesResponse:
-    route_provider = body.provider.strip().lower()
-    return await _stamp_images_for_provider(
-        job_id=job_id,
-        route_provider=route_provider,
-        settings=settings,
-    )
-
-
-async def _stamp_images_for_provider(
-    *,
-    job_id: str,
-    route_provider: str,
-    settings: Settings,
-) -> StampImagesResponse:
-    try:
-        root, _, output_dir = job_paths(settings.jobs_dir, job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if not root.is_dir():
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    if not output_dir.is_dir():
-        raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
-
-    manifest = _http_load_field_grounding_manifest(output_dir)
-    provider, model = _manifest_provider_must_match_route_or_400(manifest, route_provider)
-    stamping = _http_load_stamping_json(output_dir)
-    style = stamping_json_to_image_style(stamping)
-
-    try:
-        result = await asyncio.to_thread(
-            run_image_stamping_for_job,
-            job_id=job_id,
-            output_dir=output_dir,
-            provider=provider,
-            model=model,
-            values=stamping.values,
-            style=style,
-            require_all_values=stamping.require_all_values,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if result["succeeded_count"] == 0:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Image stamping failed for all pages.",
-                "job_id": job_id,
-                "provider": result["provider"],
-                "model": result["model"],
-                "page_count": result["page_count"],
-                "failed_count": result["failed_count"],
-                "pages": result["pages"],
-            },
-        )
-
-    return StampImagesResponse(**result)
-
-
-@stamp_router.post(
-    "/jobs/{job_id}/stamp-pdf",
-    response_model=StampPdfResponse,
-    summary="Fill the original PDF with values from stamping.json",
-    responses={
-        400: {"description": "Invalid job, missing converted manifests, or missing grounding run"},
-        404: {"description": "Job not found"},
-        422: {"description": "No pages succeeded PDF stamping"},
-    },
-)
-async def stamp_pdf_for_job(
-    job_id: str,
-    body: StampProviderRequest = Body(default_factory=StampProviderRequest),
-    settings: Settings = Depends(get_settings),
-) -> StampPdfResponse:
-    route_provider = body.provider.strip().lower()
-    return await _stamp_pdf_for_provider(
-        job_id=job_id,
-        route_provider=route_provider,
-        settings=settings,
-    )
-
-
-async def _stamp_pdf_for_provider(
-    *,
-    job_id: str,
-    route_provider: str,
-    settings: Settings,
-) -> StampPdfResponse:
-    try:
-        root, input_pdf, output_dir = job_paths(settings.jobs_dir, job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if not root.is_dir():
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    if not output_dir.is_dir():
-        raise HTTPException(status_code=400, detail=f"Job output folder not found: {output_dir}")
-    if not input_pdf.is_file():
-        raise HTTPException(status_code=400, detail=f"Input PDF not found for job: {input_pdf}")
-
-    manifest = _http_load_field_grounding_manifest(output_dir)
-    provider, model = _manifest_provider_must_match_route_or_400(manifest, route_provider)
-    stamping = _http_load_stamping_json(output_dir)
-    style = StampPdfStyle()
-
-    try:
-        result = await asyncio.to_thread(
-            run_pdf_stamping_for_job,
-            job_id=job_id,
-            input_pdf=input_pdf,
-            output_dir=output_dir,
-            provider=provider,
-            model=model,
-            values=stamping.values,
-            style=style,
-            require_all_values=stamping.require_all_values,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if result["succeeded_count"] == 0:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "PDF stamping failed for all pages.",
-                "job_id": job_id,
-                "provider": result["provider"],
-                "model": result["model"],
-                "page_count": result["page_count"],
-                "failed_count": result["failed_count"],
-                "pages": result["pages"],
-            },
-        )
-
-    return StampPdfResponse(**result)

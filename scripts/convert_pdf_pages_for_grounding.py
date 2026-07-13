@@ -146,8 +146,8 @@ def map_image_bbox_to_pdf(
 
     pdf_w_pt = float(pdf_meta["width_pt"])
     pdf_h_pt = float(pdf_meta["height_pt"])
-    saved_w = int(img_meta["saved_image_width_px"])
-    saved_h = int(img_meta["saved_image_height_px"])
+    saved_w = int(img_meta["width_px"])
+    saved_h = int(img_meta["height_px"])
 
     sx = float(mapping["image_to_pdf_scale_x"])
     sy = float(mapping["image_to_pdf_scale_y"])
@@ -223,12 +223,6 @@ def _build_page_manifest(
     mapping: dict[str, Any] = {
         "image_to_pdf_scale_x": sx,
         "image_to_pdf_scale_y": sy,
-        "formula": {
-            "pdf_x": "x * image_to_pdf_scale_x",
-            "pdf_y": "pdf_height_pt - ((y + h) * image_to_pdf_scale_y)",
-            "pdf_w": "w * image_to_pdf_scale_x",
-            "pdf_h": "h * image_to_pdf_scale_y",
-        },
     }
     if rotation_deg != 0 and allow_rotated_pages:
         mapping["status"] = "unsupported_simple_linear"
@@ -247,10 +241,6 @@ def _build_page_manifest(
             "width_px": saved_w,
             "height_px": saved_h,
             "origin": "top-left",
-            "rendered_image_width_px": rendered_w,
-            "rendered_image_height_px": rendered_h,
-            "saved_image_width_px": saved_w,
-            "saved_image_height_px": saved_h,
         },
         "rendering": {
             "dpi": dpi,
@@ -378,46 +368,9 @@ def convert_pdf_to_images(
     finally:
         doc.close()
 
-    images_manifest_path = images_dir / "manifest.json"
-    document_manifest_path = out_root / "document_manifest.json"
-
-    source_pdf_json = source_pdf_record if source_pdf_record is not None else pdf_file.name
-
-    images_manifest: dict[str, Any] = {
-        "manifest_version": MANIFEST_VERSION,
-        "source_pdf": source_pdf_json,
-        "dpi": dpi,
-        "pages": page_summaries,
-    }
-    if job_id:
-        images_manifest["job_id"] = job_id
-    images_manifest_path.write_text(json.dumps(images_manifest, indent=2) + "\n", encoding="utf-8")
-
-    document_manifest: dict[str, Any] = {
-        "manifest_version": MANIFEST_VERSION,
-        "source_pdf": source_pdf_json,
-        "dpi": dpi,
-        "converted_images_manifest": "converted_images/manifest.json",
-        "pages": [
-            {
-                "page_index": p["page_index"],
-                "page_manifest_path": p["page_manifest_path"],
-                "image_path": p["image_path"],
-            }
-            for p in page_summaries
-        ],
-    }
-    if job_id:
-        document_manifest["job_id"] = job_id
-    document_manifest_path.write_text(
-        json.dumps(document_manifest, indent=2) + "\n", encoding="utf-8"
-    )
-
     return {
         "output_dir": str(out_root),
         "source_pdf": str(pdf_file),
-        "document_manifest": str(document_manifest_path),
-        "images_manifest": str(images_manifest_path),
         "pages": page_summaries,
     }
 
@@ -442,8 +395,8 @@ def run_self_check() -> None:
         page_manifest_path = out_dir / result["pages"][0]["page_manifest_path"]
         manifest = json.loads(page_manifest_path.read_text(encoding="utf-8"))
 
-        pix_w = manifest["image"]["saved_image_width_px"]
-        pix_h = manifest["image"]["saved_image_height_px"]
+        pix_w = manifest["image"]["width_px"]
+        pix_h = manifest["image"]["height_px"]
 
         # Full-page bbox should map to full-page PDF rectangle (within pixel quantization).
         full = map_image_bbox_to_pdf((0.0, 0.0, float(pix_w), float(pix_h)), manifest)

@@ -17,6 +17,7 @@ from app.grounding_field_types import (
     stamps_as_text,
     stamps_as_toggle,
 )
+from app.services.jobs import grounding_page_px, page_manifest_image_px
 from app.vector_tick import tick_points_in_rect, tick_stroke_width_px
 
 _GROUNDING_PAGE_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
@@ -205,14 +206,15 @@ def _validate_page_inputs(
     if not isinstance(image_node, dict):
         raise ValueError("Conversion page manifest missing image object.")
     try:
-        img_w = int(image_node["saved_image_width_px"])
-        img_h = int(image_node["saved_image_height_px"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("Conversion page manifest missing saved image dimensions.") from exc
+        img_w, img_h = page_manifest_image_px(page_manifest)
+    except ValueError as exc:
+        raise ValueError("Conversion page manifest missing image dimensions.") from exc
 
     g_page_index = int(grounding.get("page_index", -1))
-    g_width = int(grounding.get("width", -1))
-    g_height = int(grounding.get("height", -1))
+    try:
+        g_width, g_height = grounding_page_px(grounding)
+    except ValueError as exc:
+        raise ValueError("Grounding page missing dimensions.") from exc
     g_unit = grounding.get("unit")
     g_origin = grounding.get("origin")
 
@@ -376,15 +378,17 @@ def stamp_qa_preview_pages(
     return results
 
 
-def _assert_grounding_run_matches(grounding_dir: Path, *, provider: str, model: str) -> None:
-    manifest_path = grounding_dir / "manifest.json"
-    if not manifest_path.is_file():
+def _assert_grounding_run_matches(job_root_dir: Path, *, provider: str, model: str) -> None:
+    from app.services.jobs import job_grounding_provider_model
+
+    try:
+        found_prov, found_model = job_grounding_provider_model(job_root_dir)
+    except (FileNotFoundError, ValueError):
         return
-    manifest = _load_json(manifest_path)
-    if manifest.get("provider") != provider or manifest.get("model") != model:
+    if found_prov != provider or found_model != model:
         raise FileNotFoundError(
             f"Field grounding run not found for provider={provider}, model={model} "
-            f"(found provider={manifest.get('provider')}, model={manifest.get('model')})."
+            f"(found provider={found_prov}, model={found_model})."
         )
 
 
@@ -415,7 +419,7 @@ def run_image_stamping_for_job(
             f"Field grounding run not found for provider={provider_norm}, model={model} "
             f"(expected directory: field_grounding)."
         )
-    _assert_grounding_run_matches(grounding_dir, provider=provider_norm, model=model)
+    _assert_grounding_run_matches(output_dir.parent, provider=provider_norm, model=model)
 
     stamp_run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     run_dir_rel = f"stamped_images/{stamp_run_id}"
@@ -474,6 +478,21 @@ def run_image_stamping_for_job(
     }
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    from app.services.jobs import prune_stamp_runs, read_job_manifest, update_job_after_image_stamp
+
+    job_root_dir = output_dir.parent
+    try:
+        job_manifest = read_job_manifest(job_root_dir)
+        max_runs = int(job_manifest.get("retention", {}).get("max_stamp_runs", 3))
+        prune_stamp_runs(output_dir, "stamped_images", max_runs)
+        update_job_after_image_stamp(
+            job_root_dir,
+            stamp_run_id=stamp_run_id,
+            run_dir_rel=run_dir_rel,
+        )
+    except FileNotFoundError:
+        pass
 
     return {
         "job_id": job_id,

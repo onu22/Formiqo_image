@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from app.services.conversion import run_convert_pdf_to_images
-from app.services.jobs import read_document_manifest
 
 LOG = logging.getLogger(__name__)
 
@@ -52,7 +51,6 @@ def run_convert_sync(
     except RuntimeError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    doc = read_document_manifest(output_dir)
     page_count = len(convert_result.get("pages", []))
 
     LOG.info(
@@ -64,7 +62,6 @@ def run_convert_sync(
 
     return {
         "convert_result": convert_result,
-        "document_manifest": doc,
         "page_count": page_count,
         "source_filename": source_filename,
         "dpi": dpi,

@@ -25,8 +25,8 @@ def test_build_stamping_json_sample_from_fields(tmp_path: Path) -> None:
     )
 
     payload = build_stamping_json_sample(fg)
-    assert payload["values"]["first_name"] == "first_name"
-    assert payload["values"]["agree_terms"] == "true"
+    assert payload["values"]["first_name"] == ""
+    assert payload["values"]["agree_terms"] == ""
     assert payload["require_all_values"] is False
     assert "image_style" in payload
 
@@ -42,4 +42,4 @@ def test_write_stamping_json_sample_overwrites(tmp_path: Path) -> None:
 
     write_stamping_json_sample(fg)
     data = json.loads((fg / "stamping.json").read_text(encoding="utf-8"))
-    assert data["values"]["email"] == "email"
+    assert data["values"]["email"] == ""

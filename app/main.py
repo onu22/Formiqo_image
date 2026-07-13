@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api_tags import OPENAPI_TAGS
 from app.dependencies import get_settings
-from app.routers import convert, grounding
+from app.http_errors import ApiHttpError, api_http_error_handler
+from app.routers import convert, grounding, jobs
 
 LOG = logging.getLogger(__name__)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_FRONTEND_DIST = _PROJECT_ROOT / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -41,12 +46,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         openapi_tags=OPENAPI_TAGS,
         description=(
-            "Fill PDF forms in three steps (use the Swagger sections in order):\n\n"
-            "1. **Prepare PDF** — convert pages to images and detect printed lines\n"
-            "2. **Locate form fields** — AI finds where each value should go\n"
-            "3. **Fill & export** — write your values to preview images or the final PDF"
+            "Formiqo MVP API.\n\n"
+            "**Jobs (UI API)** — upload, poll, edit fields, export.\n\n"
+            "Legacy three-step pipeline endpoints remain for batch/CLI use."
         ),
     )
+
+    application.add_exception_handler(ApiHttpError, api_http_error_handler)
 
     origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
     if origins:
@@ -58,17 +64,21 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
+    application.include_router(jobs.router, prefix="/api/v1")
     application.include_router(convert.ingest_router, prefix="/api/v1")
     application.include_router(grounding.router, prefix="/api/v1")
-    application.include_router(convert.stamp_router, prefix="/api/v1")
 
-    @application.get("/", include_in_schema=False)
-    def root() -> dict[str, str]:
-        return {
-            "service": settings.api_title,
-            "docs": "/docs",
-            "redoc": "/redoc",
-        }
+    if _FRONTEND_DIST.is_dir():
+        application.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
+    else:
+
+        @application.get("/", include_in_schema=False)
+        def root() -> dict[str, str]:
+            return {
+                "service": settings.api_title,
+                "docs": "/docs",
+                "redoc": "/redoc",
+            }
 
     return application
 

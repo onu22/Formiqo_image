@@ -5,8 +5,16 @@ from __future__ import annotations
 TAG_PREPARE_PDF = "1. Prepare PDF"
 TAG_LOCATE_FIELDS = "2. Locate form fields"
 TAG_FILL_EXPORT = "3. Fill & export"
+TAG_JOBS = "Jobs (UI API)"
 
 OPENAPI_TAGS: list[dict[str, str]] = [
+    {
+        "name": TAG_JOBS,
+        "description": (
+            "Primary UI API: upload a PDF, poll job status, edit fields and values, "
+            "preview stamped images, and export the final PDF."
+        ),
+    },
     {
         "name": TAG_PREPARE_PDF,
         "description": (

@@ -227,7 +227,13 @@ def write_raw_line_detection(payload: dict[str, Any], bgr: Any, output_json_path
     overlay = _draw_debug_overlay(bgr, h_lines, v_lines)
     if not cv2.imwrite(str(out_img), overlay):
         raise OSError(f"Failed to write debug image: {output_image_path}")
-    out_json.write_text(_json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    slim_payload = dict(payload)
+    slim_lines = []
+    for line in payload["lines"]:
+        slim = {k: v for k, v in line.items() if k not in {"x1", "y1", "x2", "y2"}}
+        slim_lines.append(slim)
+    slim_payload["lines"] = slim_lines
+    out_json.write_text(_json.dumps(slim_payload, indent=2) + "\n", encoding="utf-8")
 
 
 def detect_form_lines(

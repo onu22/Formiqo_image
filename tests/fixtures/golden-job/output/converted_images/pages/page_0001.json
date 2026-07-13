@@ -1,0 +1,26 @@
+{
+  "manifest_version": "1.0",
+  "page_index": 0,
+  "pdf": {
+    "width_pt": 612.0,
+    "height_pt": 792.0,
+    "origin": "bottom-left"
+  },
+  "image": {
+    "path": "converted_images/page_0001.png",
+    "format": "png",
+    "width_px": 1700,
+    "height_px": 2200,
+    "origin": "top-left"
+  },
+  "rendering": {
+    "dpi": 200.0,
+    "zoom": 2.7777777777777777,
+    "library": "pymupdf",
+    "pymupdf_version": "unknown"
+  },
+  "mapping": {
+    "image_to_pdf_scale_x": 0.36,
+    "image_to_pdf_scale_y": 0.36
+  }
+}

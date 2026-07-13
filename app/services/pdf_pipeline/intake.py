@@ -10,7 +10,13 @@ from typing import Any
 
 from app.config import Settings
 from app.services.convert_and_ground_job import run_convert_sync
-from app.services.jobs import job_paths
+from app.services.jobs import (
+    job_paths,
+    new_job_manifest,
+    update_job_after_convert,
+    update_job_after_line_detect,
+    write_job_manifest,
+)
 from app.services.line_detection_job import run_detect_form_lines_for_job_output_dir
 from app.services.pdf_pipeline.detector import PdfTypeDetector
 from app.services.pdf_pipeline.errors import PdfIntakeArchiveError, PdfPipelineError, XFA_UNSUPPORTED_USER_MESSAGE
@@ -84,6 +90,15 @@ def process_pdf_convert_and_line_detect_from_path(
         )
         if kind == PdfPipelineKind.XFA:
             raise PdfPipelineError(XFA_UNSUPPORTED_USER_MESSAGE)
+        write_job_manifest(
+            root,
+            new_job_manifest(
+                job_id=job_id,
+                source_filename=src.name,
+                dpi=int(dpi),
+                detected_pdf_type=kind.value,
+            ),
+        )
         shutil.copy2(src, input_pdf)
         conv = run_convert_sync(
             job_id=job_id,
@@ -93,11 +108,17 @@ def process_pdf_convert_and_line_detect_from_path(
             allow_rotated_pages=allow_rotated_pages,
             source_filename=src.name,
         )
+        update_job_after_convert(
+            root,
+            page_count=conv["page_count"],
+            dpi=int(dpi),
+        )
         line = run_detect_form_lines_for_job_output_dir(
             job_id=job_id,
             output_dir=output_dir,
             detector_config=detector_config,
         )
+        update_job_after_line_detect(root)
         summary_pages = [
             {
                 "page_index": p.page_index,

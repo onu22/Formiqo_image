@@ -380,10 +380,9 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _page_image_dimensions(page_manifest: dict[str, Any]) -> tuple[int, int]:
-    image_node = page_manifest.get("image")
-    if not isinstance(image_node, dict):
-        raise ValueError("Page manifest missing image object.")
-    return int(image_node["saved_image_width_px"]), int(image_node["saved_image_height_px"])
+    from app.services.jobs import page_manifest_image_px
+
+    return page_manifest_image_px(page_manifest)
 
 
 def _apply_normalize(
@@ -405,13 +404,23 @@ def _apply_normalize(
     )
 
 
+_PERSISTED_FIELD_DROP_KEYS = frozenset({"nearby_label_text", "supporting_lines", "field_surface"})
+
+
 def _field_for_stamp_storage(field: dict[str, Any]) -> dict[str, Any]:
-    out = dict(field)
+    out = {k: v for k, v in field.items() if k not in _PERSISTED_FIELD_DROP_KEYS}
+    evidence = out.get("evidence")
+    if isinstance(evidence, dict):
+        out["evidence"] = {k: v for k, v in evidence.items() if k != "label"}
     ftype = field.get("type")
     if isinstance(ftype, str):
         out["type"] = stamping_type_for_field(ftype)
         if ftype != out["type"]:
             out["grounding_type"] = ftype
+    out.setdefault("grounding_source", None)
+    out.setdefault("qa_status", None)
+    out.setdefault("reviewed", False)
+    out.setdefault("font_size_pt", None)
     return out
 
 
@@ -485,10 +494,12 @@ def write_field_grounding_outputs(
         out_path = fg_dir / out_name
 
         stamp_fields = [_field_for_stamp_storage(f) for f in grounding.get("fields", []) if isinstance(f, dict)]
+        width = grounding.get("width_px", grounding.get("width"))
+        height = grounding.get("height_px", grounding.get("height"))
         stamp_payload = {
             "page_index": grounding.get("page_index", page_index),
-            "width": grounding.get("width"),
-            "height": grounding.get("height"),
+            "width_px": width,
+            "height_px": height,
             "unit": grounding.get("unit", "px"),
             "origin": grounding.get("origin", "top-left"),
             "fields": stamp_fields,
@@ -503,25 +514,26 @@ def write_field_grounding_outputs(
             }
         )
 
-    manifest = {
-        "job_id": job_id,
-        "provider": provider,
-        "model": model,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "page_count": len(pages_meta),
-        "pages": pages_meta,
-    }
-    manifest_path = fg_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
     write_stamping_json_sample(fg_dir)
+
+    from app.services.jobs import update_job_after_grounding
+
+    job_root_dir = output_dir.parent
+    update_job_after_grounding(
+        job_root_dir,
+        provider=provider,
+        model=model,
+        grounded_pages=len(pages_meta),
+        total_pages=len(page_results),
+        failed_pages=[],
+    )
 
     return {
         "job_id": job_id,
         "provider": provider,
         "model": model,
         "run_dir": "field_grounding",
-        "manifest_path": "field_grounding/manifest.json",
+        "manifest_path": "job.json",
         "page_count": len(pages_meta),
         "succeeded_count": len(pages_meta),
         "failed_count": 0,
@@ -556,6 +568,15 @@ def run_semantic_grounding_for_job(
         raise ValueError("No converted page PNGs found; run conversion and line detection first.")
 
     targets = sorted(idx for idx, _ in page_entries)
+
+    job_root_dir = output_dir.parent
+    try:
+        from app.services.jobs import read_job_manifest, update_job_stage
+
+        read_job_manifest(job_root_dir)
+        update_job_stage(job_root_dir, "grounding", status="running")
+    except FileNotFoundError:
+        pass
 
     succeeded: list[dict[str, Any]] = []
     failed_pages: list[dict[str, Any]] = []
@@ -602,4 +623,15 @@ def run_semantic_grounding_for_job(
     summary["succeeded_count"] = len(succeeded)
     summary["page_count"] = len(succeeded) + len(failed_pages)
     summary["failed_pages"] = failed_pages
+
+    if failed_pages:
+        from app.services.jobs import read_job_manifest, update_job_stage, write_job_manifest
+
+        job_root_dir = output_dir.parent
+        manifest = read_job_manifest(job_root_dir)
+        manifest["stages"]["grounding"]["failed_pages"] = failed_pages
+        manifest["stages"]["grounding"]["grounded_pages"] = len(succeeded)
+        manifest["stages"]["grounding"]["total_pages"] = len(succeeded) + len(failed_pages)
+        write_job_manifest(job_root_dir, manifest)
+
     return summary
