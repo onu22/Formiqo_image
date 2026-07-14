@@ -70,6 +70,7 @@ T001–T003 → T004 (G1) → T005 → T011 → T016 → G3 → E6 integration (
 - [x] G1 APPROVED WITH CONDITIONS (2026-07-12)
 - [x] E1 acceptance criteria from PRD met
 - [x] E3 integration test passes
+- [x] G4 QA APPROVED (2026-07-14) — MVP ship unblocked
 - [ ] Sprint retro filled via `/sprint-plan` close or manual edit
 
 ## Retrospective
