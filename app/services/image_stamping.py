@@ -1,15 +1,12 @@
-"""Stamp user-provided values onto converted PNG page images."""
+"""Render stamped values onto converted PNG page images (preview path, PRD E2)."""
 
 from __future__ import annotations
 
-import json
-import re
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from app.grounding_field_types import (
     is_supported_grounding_field_type,
@@ -17,219 +14,107 @@ from app.grounding_field_types import (
     stamps_as_text,
     stamps_as_toggle,
 )
-from app.services.jobs import grounding_page_px, page_manifest_image_px
+from app.services.stamping_common import (
+    PageGeometry,
+    StampStyle,
+    bbox_from_field,
+    bottom_padding_pt,
+    build_page_geometry,
+    discover_grounding_pages,
+    fit_multiline_to_box_pt,
+    fit_text_to_width_pt,
+    image_path_from_manifest,
+    load_json,
+    load_pil_font,
+    prepare_stamp_run,
+    read_page_manifest,
+    rel_to_output,
+    resolve_field_font_size_pt,
+    run_stamp_pages,
+    summarize_page_results,
+    validate_hex_color,
+    write_run_manifest,
+    finalize_job_after_stamp,
+    DEFAULT_LINE_HEIGHT_FACTOR,
+)
 from app.vector_tick import tick_points_in_rect, tick_stroke_width_px
-
-_GROUNDING_PAGE_RE = re.compile(r"^page_(\d{4})\.fields\.json$")
-_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
-
-
-@dataclass(frozen=True)
-class StampImageStyle:
-    """Drawing options for image stamping."""
-
-    font_size_px: int = 22
-    font_color: str = "#111111"
-    padding_px: int = 3
-    draw_debug_boxes: bool = False
-    debug_box_color: str = "#ff0000"
-
-
-def _validate_hex_color(value: str, *, field_name: str) -> str:
-    if not _HEX_COLOR_RE.match(value):
-        raise ValueError(f"{field_name} must be a hex color like #111111.")
-    return value
-
-
-def _load_font(size_px: int) -> ImageFont.ImageFont:
-    """Load a scalable font when available, otherwise fall back to Pillow default."""
-    candidates = [
-        "DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-    ]
-    for candidate in candidates:
-        try:
-            return ImageFont.truetype(candidate, size_px)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
-    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-    return right - left, bottom - top
-
-
-def _fit_text_to_width(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    *,
-    max_width_px: int,
-    preferred_font_size_px: int,
-    min_font_size_px: int = 8,
-) -> tuple[str, ImageFont.ImageFont]:
-    """Shrink text, then truncate with ellipsis if it still does not fit."""
-    for size in range(preferred_font_size_px, min_font_size_px - 1, -1):
-        font = _load_font(size)
-        width, _ = _text_size(draw, text, font)
-        if width <= max_width_px:
-            return text, font
-
-    font = _load_font(min_font_size_px)
-    ellipsis = "..."
-    if _text_size(draw, ellipsis, font)[0] > max_width_px:
-        return "", font
-
-    clipped = text
-    while clipped:
-        candidate = f"{clipped}{ellipsis}"
-        if _text_size(draw, candidate, font)[0] <= max_width_px:
-            return candidate, font
-        clipped = clipped[:-1]
-    return ellipsis, font
-
-
-def _bbox_from_field(field: dict[str, Any], *, width_px: int, height_px: int, field_index: int) -> dict[str, int]:
-    bbox = field.get("bbox")
-    if not isinstance(bbox, dict):
-        raise ValueError(f"fields[{field_index}].bbox must be an object.")
-    expected = {"x", "y", "w", "h"}
-    if set(bbox.keys()) != expected:
-        raise ValueError(f"fields[{field_index}].bbox keys must be exactly {sorted(expected)}.")
-    try:
-        x = int(bbox["x"])
-        y = int(bbox["y"])
-        w = int(bbox["w"])
-        h = int(bbox["h"])
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"fields[{field_index}].bbox values must be integers.") from exc
-
-    if w <= 0 or h <= 0:
-        raise ValueError(f"fields[{field_index}].bbox requires w > 0 and h > 0.")
-    if x < 0 or y < 0:
-        raise ValueError(f"fields[{field_index}].bbox requires x >= 0 and y >= 0.")
-    if x + w > width_px or y + h > height_px:
-        raise ValueError(f"fields[{field_index}].bbox exceeds image bounds ({width_px}x{height_px}).")
-    return {"x": x, "y": y, "w": w, "h": h}
 
 
 def stamp_text_into_bbox(
     draw: ImageDraw.ImageDraw,
     *,
-    bbox: dict[str, int],
+    bbox: dict[str, float],
     text: str,
-    style: StampImageStyle,
+    style: StampStyle,
+    font_size_pt: float,
+    geometry: PageGeometry,
+    wrap: bool,
 ) -> bool:
-    """Draw text inside a pixel bbox. Returns true when visible text was drawn."""
+    """Draw text inside a pixel bbox using PDF-point sized fitting (parity with pdf_stamping)."""
     if text == "":
         return False
 
-    inner_w = max(1, bbox["w"] - (style.padding_px * 2))
-    text_to_draw, font = _fit_text_to_width(
-        draw,
-        text,
-        max_width_px=inner_w,
-        preferred_font_size_px=style.font_size_px,
-    )
-    if not text_to_draw:
+    padding_px = style.padding_pt / geometry.scale_y
+    bottom_px = bottom_padding_pt(style, font_size_pt) / geometry.scale_y
+
+    inner_x = bbox["x"] + padding_px
+    inner_y = bbox["y"] + padding_px
+    inner_w_px = max(1.0, bbox["w"] - (2 * padding_px))
+    inner_h_px = max(1.0, bbox["h"] - padding_px - bottom_px)
+
+    max_width_pt = inner_w_px * geometry.scale_x
+    max_height_pt = inner_h_px * geometry.scale_y
+
+    if wrap:
+        lines, size_pt = fit_multiline_to_box_pt(
+            text,
+            max_width_pt=max_width_pt,
+            max_height_pt=max_height_pt,
+            preferred_size_pt=font_size_pt,
+        )
+    else:
+        fitted, size_pt = fit_text_to_width_pt(text, max_width_pt=max_width_pt, preferred_size_pt=font_size_pt)
+        lines = [fitted] if fitted else []
+
+    lines = [line for line in lines if line]
+    if not lines:
         return False
 
-    _, text_h = _text_size(draw, text_to_draw, font)
-    x = bbox["x"] + style.padding_px
-    y = bbox["y"] + max(style.padding_px, (bbox["h"] - text_h) // 2)
-    draw.text((x, y), text_to_draw, fill=style.font_color, font=font)
-    return True
+    size_px = size_pt / geometry.scale_y
+    font = load_pil_font(max(1, round(size_px)))
+    line_height_px = (size_pt * DEFAULT_LINE_HEIGHT_FACTOR) / geometry.scale_y
+
+    baseline_y = inner_y + inner_h_px
+    start_baseline = baseline_y - (len(lines) - 1) * line_height_px
+
+    drew = False
+    for i, line in enumerate(lines):
+        y = start_baseline + (i * line_height_px)
+        draw.text((inner_x, y), line, font=font, fill=style.text_color, anchor="ls")
+        drew = True
+    return drew
 
 
 def stamp_toggle_mark_into_bbox(
     draw: ImageDraw.ImageDraw,
     *,
-    bbox: dict[str, int],
-    style: StampImageStyle,
+    bbox: dict[str, float],
+    style: StampStyle,
+    geometry: PageGeometry,
 ) -> bool:
     """Draw a vector check mark (two strokes) for checkbox/radio regions."""
-    p = style.padding_px
-    iw = bbox["w"] - 2 * p
-    ih = bbox["h"] - 2 * p
+    padding_px = style.padding_pt / geometry.scale_y
+    iw = bbox["w"] - (2 * padding_px)
+    ih = bbox["h"] - (2 * padding_px)
     if iw < 4 or ih < 4:
         return False
-    ix = bbox["x"] + p
-    iy = bbox["y"] + p
-    (x1, y1), (x2, y2), (x3, y3) = tick_points_in_rect(float(ix), float(iy), float(iw), float(ih))
+    ix = bbox["x"] + padding_px
+    iy = bbox["y"] + padding_px
+    (x1, y1), (x2, y2), (x3, y3) = tick_points_in_rect(ix, iy, iw, ih)
     lw = tick_stroke_width_px(min(iw, ih))
-    draw.line([(x1, y1), (x2, y2)], fill=style.font_color, width=lw)
-    draw.line([(x2, y2), (x3, y3)], fill=style.font_color, width=lw)
+    draw.line([(x1, y1), (x2, y2)], fill=style.text_color, width=lw)
+    draw.line([(x2, y2), (x3, y3)], fill=style.text_color, width=lw)
     return True
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected JSON object: {path}")
-    return data
-
-
-def _read_page_manifest(output_dir: Path, page_index: int) -> dict[str, Any]:
-    rel = Path("converted_images") / "pages" / f"page_{page_index + 1:04d}.json"
-    path = output_dir / rel
-    if not path.is_file():
-        raise FileNotFoundError(f"Conversion page manifest not found: {rel}")
-    return _load_json(path)
-
-
-def _image_path_from_manifest(output_dir: Path, page_manifest: dict[str, Any]) -> Path:
-    image_node = page_manifest.get("image")
-    if not isinstance(image_node, dict):
-        raise ValueError("Conversion page manifest missing image object.")
-    image_rel = image_node.get("path")
-    if not isinstance(image_rel, str) or not image_rel:
-        raise ValueError("Conversion page manifest image.path must be a non-empty string.")
-    output_root = output_dir.resolve()
-    image_path = (output_root / image_rel).resolve()
-    try:
-        image_path.relative_to(output_root)
-    except ValueError as exc:
-        raise ValueError(f"Source image path escapes job output directory: {image_rel}") from exc
-    if not image_path.is_file():
-        raise FileNotFoundError(f"Source image not found: {image_rel}")
-    return image_path
-
-
-def _validate_page_inputs(
-    *,
-    page_manifest: dict[str, Any],
-    grounding: dict[str, Any],
-    page_index: int,
-) -> tuple[int, int, str]:
-    image_node = page_manifest.get("image")
-    if not isinstance(image_node, dict):
-        raise ValueError("Conversion page manifest missing image object.")
-    try:
-        img_w, img_h = page_manifest_image_px(page_manifest)
-    except ValueError as exc:
-        raise ValueError("Conversion page manifest missing image dimensions.") from exc
-
-    g_page_index = int(grounding.get("page_index", -1))
-    try:
-        g_width, g_height = grounding_page_px(grounding)
-    except ValueError as exc:
-        raise ValueError("Grounding page missing dimensions.") from exc
-    g_unit = grounding.get("unit")
-    g_origin = grounding.get("origin")
-
-    if g_page_index != page_index:
-        raise ValueError(f"Grounding page_index ({g_page_index}) does not match expected {page_index}.")
-    if g_width != img_w or g_height != img_h:
-        raise ValueError(
-            f"Grounding dimensions ({g_width}x{g_height}) do not match converted image ({img_w}x{img_h})."
-        )
-    if g_unit != "px":
-        raise ValueError('Grounding unit must be "px".')
-    if g_origin != "top-left":
-        raise ValueError('Grounding origin must be "top-left".')
-    image_rel = str(image_node.get("path", ""))
-    return img_w, img_h, image_rel
 
 
 def stamp_page_image(
@@ -239,18 +124,16 @@ def stamp_page_image(
     grounding_path: Path,
     output_image_path: Path,
     values: dict[str, str],
-    style: StampImageStyle,
+    style: StampStyle,
     require_all_values: bool,
+    overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Stamp one page image and return a per-page result."""
-    page_manifest = _read_page_manifest(output_dir, page_index)
-    grounding = _load_json(grounding_path)
-    width_px, height_px, image_rel = _validate_page_inputs(
-        page_manifest=page_manifest,
-        grounding=grounding,
-        page_index=page_index,
-    )
-    source_image_path = _image_path_from_manifest(output_dir, page_manifest)
+    overrides = overrides or {}
+    _, page_manifest = read_page_manifest(output_dir, page_index)
+    grounding = load_json(grounding_path)
+    geometry = build_page_geometry(page_manifest=page_manifest, grounding=grounding, page_index=page_index)
+    source_image_path = image_path_from_manifest(output_dir, page_manifest)
 
     fields = grounding.get("fields")
     if not isinstance(fields, list):
@@ -263,13 +146,16 @@ def stamp_page_image(
 
     with Image.open(source_image_path) as source:
         image = source.convert("RGBA")
-    if image.size != (width_px, height_px):
-        raise ValueError(f"PNG dimensions {image.size} do not match manifest dimensions ({width_px}, {height_px}).")
+    if image.size != (geometry.width_px, geometry.height_px):
+        raise ValueError(
+            f"PNG dimensions {image.size} do not match manifest dimensions "
+            f"({geometry.width_px}, {geometry.height_px})."
+        )
 
     draw = ImageDraw.Draw(image)
     if style.draw_debug_boxes:
-        _validate_hex_color(style.debug_box_color, field_name="debug_box_color")
-    _validate_hex_color(style.font_color, field_name="font_color")
+        validate_hex_color(style.debug_box_color, field_name="debug_box_color")
+    validate_hex_color(style.text_color, field_name="text_color")
 
     for idx, field in enumerate(fields):
         if not isinstance(field, dict):
@@ -279,7 +165,7 @@ def stamp_page_image(
         field_type = field_type_raw if isinstance(field_type_raw, str) else ""
         if not isinstance(field_id, str) or not field_id.strip():
             raise ValueError(f"fields[{idx}].field_id must be a non-empty string.")
-        bbox = _bbox_from_field(field, width_px=width_px, height_px=height_px, field_index=idx)
+        bbox = bbox_from_field(field, width_px=geometry.width_px, height_px=geometry.height_px, field_index=idx)
 
         if style.draw_debug_boxes:
             draw.rectangle(
@@ -300,7 +186,18 @@ def stamp_page_image(
             text_val = values[field_id]
             if text_val == "":
                 continue
-            if stamp_text_into_bbox(draw, bbox=bbox, text=text_val, style=style):
+            font_size_pt = resolve_field_font_size_pt(
+                field, field_id=field_id, overrides=overrides, default_pt=style.font_size_pt
+            )
+            if stamp_text_into_bbox(
+                draw,
+                bbox=bbox,
+                text=text_val,
+                style=style,
+                font_size_pt=font_size_pt,
+                geometry=geometry,
+                wrap=field_type == "multiline_text",
+            ):
                 stamped_count += 1
         elif stamps_as_toggle(field_type):
             if field_id not in values:
@@ -309,7 +206,7 @@ def stamp_page_image(
             raw_val = values[field_id]
             if not is_toggle_value_truthy(raw_val):
                 continue
-            if stamp_toggle_mark_into_bbox(draw, bbox=bbox, style=style):
+            if stamp_toggle_mark_into_bbox(draw, bbox=bbox, style=style, geometry=geometry):
                 stamped_count += 1
 
     if require_all_values and missing_values:
@@ -321,27 +218,15 @@ def stamp_page_image(
     return {
         "page_index": page_index,
         "status": "succeeded",
-        "source_image": image_rel,
-        "grounding_file": str(grounding_path.relative_to(output_dir)).replace("\\", "/"),
-        "output_image": str(output_image_path.relative_to(output_dir)).replace("\\", "/"),
+        "source_image": geometry.image_rel,
+        "grounding_file": rel_to_output(output_dir, grounding_path),
+        "output_image": rel_to_output(output_dir, output_image_path),
         "field_count": len(fields),
         "stamped_count": stamped_count,
         "missing_value_count": len(missing_values),
         "unsupported_field_count": unsupported_count,
         "warnings": warnings,
     }
-
-
-def _discover_grounding_pages(grounding_dir: Path) -> list[tuple[int, Path]]:
-    pages: list[tuple[int, Path]] = []
-    for path in sorted(grounding_dir.glob("page_*.fields.json")):
-        match = _GROUNDING_PAGE_RE.match(path.name)
-        if not match:
-            continue
-        pages.append((int(match.group(1)) - 1, path))
-    if not pages:
-        raise FileNotFoundError(f"No grounded page files found under: {grounding_dir}")
-    return pages
 
 
 def stamp_qa_preview_pages(
@@ -351,8 +236,9 @@ def stamp_qa_preview_pages(
     refined_grounding_dir: Path,
     preview_run_dir: Path,
     values: dict[str, str],
-    style: StampImageStyle,
+    style: StampStyle,
     require_all_values: bool,
+    overrides: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Stamp previews using grounding JSON files under ``refined_grounding_dir`` (per-page paths).
@@ -361,7 +247,7 @@ def stamp_qa_preview_pages(
     """
     provider_norm = provider.strip().lower()
     preview_run_dir.mkdir(parents=True, exist_ok=True)
-    pages = _discover_grounding_pages(refined_grounding_dir)
+    pages = discover_grounding_pages(refined_grounding_dir)
     results: list[dict[str, Any]] = []
     for page_index, grounding_path in pages:
         output_image_path = preview_run_dir / f"page_{page_index + 1:04d}.{provider_norm}.stamped.png"
@@ -372,24 +258,11 @@ def stamp_qa_preview_pages(
             output_image_path=output_image_path,
             values=values,
             style=style,
+            overrides=overrides,
             require_all_values=require_all_values,
         )
         results.append(page_result)
     return results
-
-
-def _assert_grounding_run_matches(job_root_dir: Path, *, provider: str, model: str) -> None:
-    from app.services.jobs import job_grounding_provider_model
-
-    try:
-        found_prov, found_model = job_grounding_provider_model(job_root_dir)
-    except (FileNotFoundError, ValueError):
-        return
-    if found_prov != provider or found_model != model:
-        raise FileNotFoundError(
-            f"Field grounding run not found for provider={provider}, model={model} "
-            f"(found provider={found_prov}, model={found_model})."
-        )
 
 
 def run_image_stamping_for_job(
@@ -399,69 +272,38 @@ def run_image_stamping_for_job(
     provider: str,
     model: str,
     values: dict[str, str],
-    style: StampImageStyle,
+    style: StampStyle,
     require_all_values: bool,
+    overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Stamp all grounded converted images for a job."""
-    provider_norm = provider.strip().lower()
-    if not provider_norm:
-        raise ValueError("provider must be a non-empty string.")
-    if not model.strip():
-        raise ValueError("model must be a non-empty string.")
+    overrides = overrides or {}
+    ctx = prepare_stamp_run(output_dir=output_dir, provider=provider, model=model, subdir="stamped_images")
 
-    converted_pages_dir = output_dir / "converted_images" / "pages"
-    if not converted_pages_dir.is_dir():
-        raise FileNotFoundError(f"Conversion page manifests not found: converted_images/pages")
-
-    grounding_dir = output_dir / "field_grounding"
-    if not grounding_dir.is_dir():
-        raise FileNotFoundError(
-            f"Field grounding run not found for provider={provider_norm}, model={model} "
-            f"(expected directory: field_grounding)."
+    def _render(page_index: int, grounding_path: Path) -> dict[str, Any]:
+        output_image_path = ctx.run_dir / f"page_{page_index + 1:04d}.{ctx.provider}.stamped.png"
+        return stamp_page_image(
+            output_dir=output_dir,
+            page_index=page_index,
+            grounding_path=grounding_path,
+            output_image_path=output_image_path,
+            values=values,
+            style=style,
+            overrides=overrides,
+            require_all_values=require_all_values,
         )
-    _assert_grounding_run_matches(output_dir.parent, provider=provider_norm, model=model)
 
-    stamp_run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    run_dir_rel = f"stamped_images/{stamp_run_id}"
-    run_dir = output_dir / run_dir_rel
-    grounding_pages = _discover_grounding_pages(grounding_dir)
+    page_results = run_stamp_pages(output_dir=output_dir, grounding_pages=ctx.grounding_pages, render_page=_render)
+    succeeded_count, failed_count = summarize_page_results(page_results)
+    output_files = [p["output_image"] for p in page_results if p.get("status") == "succeeded"]
 
-    page_results: list[dict[str, Any]] = []
-    output_files: list[str] = []
-
-    for page_index, grounding_path in grounding_pages:
-        try:
-            output_image_path = run_dir / f"page_{page_index + 1:04d}.{provider_norm}.stamped.png"
-            page_result = stamp_page_image(
-                output_dir=output_dir,
-                page_index=page_index,
-                grounding_path=grounding_path,
-                output_image_path=output_image_path,
-                values=values,
-                style=style,
-                require_all_values=require_all_values,
-            )
-            page_results.append(page_result)
-            output_files.append(page_result["output_image"])
-        except Exception as exc:  # noqa: BLE001 - preserve per-page errors in API response
-            page_results.append(
-                {
-                    "page_index": page_index,
-                    "status": "failed",
-                    "grounding_file": str(grounding_path.relative_to(output_dir)).replace("\\", "/"),
-                    "error": str(exc),
-                }
-            )
-
-    succeeded_count = sum(1 for page in page_results if page["status"] == "succeeded")
-    failed_count = len(page_results) - succeeded_count
-    manifest_rel = f"{run_dir_rel}/manifest.json"
+    manifest_rel = f"{ctx.run_dir_rel}/manifest.json"
     manifest = {
         "job_id": job_id,
-        "provider": provider_norm,
-        "model": model,
-        "stamp_run_id": stamp_run_id,
-        "run_dir": run_dir_rel,
+        "provider": ctx.provider,
+        "model": ctx.model,
+        "stamp_run_id": ctx.stamp_run_id,
+        "run_dir": ctx.run_dir_rel,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "page_count": len(page_results),
         "succeeded_count": succeeded_count,
@@ -469,37 +311,30 @@ def run_image_stamping_for_job(
         "files": output_files,
         "pages": page_results,
         "style": {
-            "font_size_px": style.font_size_px,
-            "font_color": style.font_color,
-            "padding_px": style.padding_px,
+            "font_size_pt": style.font_size_pt,
+            "text_color": style.text_color,
             "draw_debug_boxes": style.draw_debug_boxes,
             "debug_box_color": style.debug_box_color,
         },
     }
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    write_run_manifest(ctx.run_dir, manifest)
 
-    from app.services.jobs import prune_stamp_runs, read_job_manifest, update_job_after_image_stamp
+    from app.services.jobs import update_job_after_image_stamp
 
-    job_root_dir = output_dir.parent
-    try:
-        job_manifest = read_job_manifest(job_root_dir)
-        max_runs = int(job_manifest.get("retention", {}).get("max_stamp_runs", 3))
-        prune_stamp_runs(output_dir, "stamped_images", max_runs)
-        update_job_after_image_stamp(
-            job_root_dir,
-            stamp_run_id=stamp_run_id,
-            run_dir_rel=run_dir_rel,
-        )
-    except FileNotFoundError:
-        pass
+    finalize_job_after_stamp(
+        output_dir=output_dir,
+        subdir="stamped_images",
+        update_job=lambda job_root_dir: update_job_after_image_stamp(
+            job_root_dir, stamp_run_id=ctx.stamp_run_id, run_dir_rel=ctx.run_dir_rel
+        ),
+    )
 
     return {
         "job_id": job_id,
-        "provider": provider_norm,
-        "model": model,
-        "stamp_run_id": stamp_run_id,
-        "run_dir": run_dir_rel,
+        "provider": ctx.provider,
+        "model": ctx.model,
+        "stamp_run_id": ctx.stamp_run_id,
+        "run_dir": ctx.run_dir_rel,
         "manifest_path": manifest_rel,
         "page_count": len(page_results),
         "succeeded_count": succeeded_count,

@@ -199,14 +199,6 @@ class StampProviderRequest(BaseModel):
 StampImagesRequest = StampProviderRequest
 
 
-class StampImagesStyle(BaseModel):
-    font_size_px: int = Field(default=22, ge=1, le=300)
-    font_color: str = Field(default="#111111", pattern=r"^#[0-9a-fA-F]{6}$")
-    padding_px: int = Field(default=3, ge=0, le=200)
-    draw_debug_boxes: bool = False
-    debug_box_color: str = Field(default="#ff0000", pattern=r"^#[0-9a-fA-F]{6}$")
-
-
 class StampImagesPageResult(BaseModel):
     page_index: int
     status: str
@@ -234,12 +226,23 @@ class StampImagesResponse(BaseModel):
     pages: list[StampImagesPageResult]
 
 
-class StampPdfStyle(BaseModel):
+class StampStyleSchema(BaseModel):
+    """Unified stamping style in PDF points, replacing the old pixel-based ``image_style``
+    (PRD E2.2). Pixel sizes are derived per-page from the page manifest's image-to-PDF scale.
+    """
+
     font_size_pt: float = Field(default=11.0, gt=0, le=200)
-    font_color: str = Field(default="#111111", pattern=r"^#[0-9a-fA-F]{6}$")
-    padding_pt: float = Field(default=1.0, ge=0, le=50)
-    draw_debug_boxes: bool = False
-    debug_box_color: str = Field(default="#ff0000", pattern=r"^#[0-9a-fA-F]{6}$")
+    text_color: str = Field(default="#111111", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class FieldStyleOverride(BaseModel):
+    """Per-field style override keyed by ``field_id`` in ``stamping.json.overrides``.
+
+    ``font_size_pt`` is the only override today; the map shape leaves room for
+    position/color overrides to join later without a schema break.
+    """
+
+    font_size_pt: float | None = Field(default=None, gt=0, le=200)
 
 
 class StampingJson(BaseModel):
@@ -249,7 +252,8 @@ class StampingJson(BaseModel):
 
     values: dict[str, str] = Field(default_factory=dict)
     require_all_values: bool = False
-    image_style: StampImagesStyle | None = None
+    style: StampStyleSchema = Field(default_factory=StampStyleSchema)
+    overrides: dict[str, FieldStyleOverride] = Field(default_factory=dict)
 
 
 class StampPdfPageResult(BaseModel):
@@ -343,7 +347,7 @@ class GroundFieldsFromLinesRequest(BaseModel):
         default="gpt-5.5",
         description=(
             "Vision model id; defaults to gpt-5.5 for openai and claude-opus-4-7 for anthropic "
-            "when omitted, or use env FORMIQO_GROUNDING_MODEL / FORMIQO_COMBINED_DEFAULT_*."
+            "when omitted, or configure the openai default via env FORMIQO_GROUNDING_MODEL."
         ),
     )
 

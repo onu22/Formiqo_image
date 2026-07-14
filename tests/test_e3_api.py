@@ -141,6 +141,17 @@ def test_upload_poll_fields_patch_stamp_export(mock_grounding, client: TestClien
     assert patch_values.status_code == 200
     assert patch_values.json()["values"]["field_001"] == "Jane Doe"
 
+    # E2 lands the global style PATCH (was a 501 stub pre-E2); font_size_pt round-trips.
+    patch_style = client.patch(
+        f"/api/v1/jobs/{job_id}/values",
+        json={"style": {"font_size_pt": 14}},
+    )
+    assert patch_style.status_code == 200
+    assert patch_style.json()["style"]["font_size_pt"] == 14
+
+    fields_after_style = client.get(f"/api/v1/jobs/{job_id}/fields")
+    assert fields_after_style.json()["style"]["font_size_pt"] == 14
+
     page_image = client.get(f"/api/v1/jobs/{job_id}/pages/1/image")
     assert page_image.status_code == 200
     assert page_image.headers["content-type"].startswith("image/png")

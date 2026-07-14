@@ -28,7 +28,8 @@ def test_build_stamping_json_sample_from_fields(tmp_path: Path) -> None:
     assert payload["values"]["first_name"] == ""
     assert payload["values"]["agree_terms"] == ""
     assert payload["require_all_values"] is False
-    assert "image_style" in payload
+    assert payload["style"]["font_size_pt"] == 11.0
+    assert payload["overrides"] == {}
 
 
 def test_write_stamping_json_sample_overwrites(tmp_path: Path) -> None:

@@ -44,11 +44,14 @@ goal: G1 sign-off plus E1 data cleanup and E3 API skeleton — UI-ready backend 
 | T015 | E3 | M1c | GET page image + stamp-images + stamp-pdf + export | BE | T013 | DONE |
 | T016 | E3 | M1c | httpx integration test happy path | BE | T015 | DONE |
 | T017 | E3 | M1c | Path traversal tests for file routes | BE | T015 | DONE |
-| T018 | E6 | M1d | Scaffold frontend/ (Vite + React + Tailwind + shadcn) | FE | T003 | TODO |
-| T019 | E6 | M1d | Jobs list + upload UI from mockups (mock API) | FE | T018 | TODO |
-| T020 | E2 | — | stamping_common.py extraction | BE | T009 | TODO |
-| T021 | E4 | — | Structured outputs for grounding | LLM | T006 | TODO |
-| T022 | E4 | — | Parallel per-page grounding | LLM | T021 | TODO |
+| T018 | E6 | M1d | Scaffold frontend/ (Vite + React + Tailwind + shadcn) | FE | T003 | DONE |
+| T019 | E6 | M1d | Jobs list + upload UI from mockups (mock API) | FE | T018 | DONE |
+| T023 | E6 | M1d | Processing/failed/editor views + live API integration (post-G3) | FE | T019 | DONE |
+| T024 | E6 | M1d | Editor drag/nudge/save/refresh-preview/export flow + Playwright e2e smoke | FE | T023 | DONE |
+| T020 | E2 | — | stamping_common.py extraction | BE | T009 | DONE |
+| T021 | E4 | — | Structured outputs for grounding (OpenAI json_schema + Anthropic tool-use) | LLM | T006 | DONE |
+| T022 | E4 | — | Parallel per-page grounding (bounded concurrency + per-page isolation) | LLM | T021 | DONE |
+| T025 | E4 | — | Anchor-first grounding (cell/line/label anchors) + grounding_source | LLM | T021 | DONE |
 
 ## Critical path
 

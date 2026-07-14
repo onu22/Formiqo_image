@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
-from datetime import datetime, timezone
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,6 +17,7 @@ from openai import OpenAI
 from app.config import Settings
 from app.grounding_field_types import stamping_type_for_field
 from app.services.form_geometry import (
+    apply_anchor_grounding,
     build_geometry_index,
     load_detected_lines,
     normalize_page_grounding,
@@ -26,6 +28,12 @@ from app.services.grounding_prompt import (
     build_openai_messages,
     configure_prompt_dir,
 )
+from app.services.grounding_schema import (
+    anthropic_grounding_tool,
+    anthropic_tool_choice,
+    openai_response_format,
+)
+from app.services.label_anchors import extract_label_anchors
 from app.services.line_detection_job import list_converted_page_pngs
 from app.services.stamping_config import write_stamping_json_sample
 
@@ -59,6 +67,9 @@ class GroundingLlmCallResult:
     finish_reason: str | None
     max_output_tokens: int
     usage: dict[str, int] | None
+    # Populated when the provider returns a structured object directly (Anthropic tool-use),
+    # so no text JSON parsing is needed.
+    parsed: dict[str, Any] | None = dataclass_field(default=None)
 
 
 def _openai_usage_dict(usage: Any) -> dict[str, int] | None:
@@ -136,7 +147,16 @@ def _log_grounding_llm_usage(
         LOG.info(msg, *args)
 
 
+_DEFAULT_ANTHROPIC_GROUNDING_MODEL = "claude-opus-4-7"
+
+
 def resolve_grounding_model(*, provider: str, model: str | None, settings: Settings) -> tuple[str, str]:
+    """Resolve the grounding model string, falling back to per-provider defaults.
+
+    ``FORMIQO_GROUNDING_MODEL`` (``settings.grounding_model``) is the single configurable
+    default, used for provider=openai; anthropic has no equivalent settings knob (its
+    default is fixed here, matching the request-schema fallback in ``app.schemas``).
+    """
     prov = provider.strip().lower()
     if prov not in _SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider {provider!r}; use openai or anthropic.")
@@ -146,15 +166,9 @@ def resolve_grounding_model(*, provider: str, model: str | None, settings: Setti
         return prov, raw
 
     if prov == "anthropic":
-        resolved = settings.combined_default_anthropic_model.strip()
-        if not resolved:
-            raise ValueError(
-                "Resolved Anthropic model is empty; set model in request or "
-                "FORMIQO_COMBINED_DEFAULT_ANTHROPIC_MODEL."
-            )
-        return prov, resolved
+        return prov, _DEFAULT_ANTHROPIC_GROUNDING_MODEL
 
-    resolved = settings.grounding_model.strip() or settings.combined_default_openai_model.strip()
+    resolved = settings.grounding_model.strip()
     if not resolved:
         raise ValueError(
             "Resolved OpenAI model is empty; set model in request or FORMIQO_GROUNDING_MODEL."
@@ -184,11 +198,13 @@ def _call_openai_grounding_raw(
     messages: list[dict[str, Any]],
     timeout_seconds: float,
     max_output_tokens: int,
+    structured: bool = False,
 ) -> GroundingLlmCallResult:
+    response_format = openai_response_format() if structured else {"type": "json_object"}
     response = client.chat.completions.create(
         model=model,
         messages=messages,
-        response_format={"type": "json_object"},
+        response_format=response_format,
         timeout=timeout_seconds,
         max_completion_tokens=max_output_tokens,
     )
@@ -213,6 +229,15 @@ def _extract_anthropic_text(response: Any) -> str:
     return "\n".join(parts)
 
 
+def _extract_anthropic_tool_input(response: Any) -> dict[str, Any] | None:
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use":
+            data = getattr(block, "input", None)
+            if isinstance(data, dict):
+                return data
+    return None
+
+
 def _call_anthropic_grounding_raw(
     *,
     client: Anthropic,
@@ -221,23 +246,44 @@ def _call_anthropic_grounding_raw(
     user_content: list[dict[str, Any]],
     timeout_seconds: float,
     max_tokens: int,
+    structured: bool = False,
 ) -> GroundingLlmCallResult:
-    response = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_text,
-        messages=[{"role": "user", "content": user_content}],
-        timeout=timeout_seconds,
-    )
+    create_kwargs: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_text,
+        "messages": [{"role": "user", "content": user_content}],
+        "timeout": timeout_seconds,
+    }
+    if structured:
+        create_kwargs["tools"] = [anthropic_grounding_tool()]
+        create_kwargs["tool_choice"] = anthropic_tool_choice()
+
+    response = client.messages.create(**create_kwargs)
+    stop_reason = getattr(response, "stop_reason", None)
+    finish_reason = str(stop_reason) if stop_reason is not None else None
+    usage = _anthropic_usage_dict(getattr(response, "usage", None))
+
+    if structured:
+        parsed = _extract_anthropic_tool_input(response)
+        if parsed is None:
+            raise ValueError("Anthropic tool-use returned no structured field payload.")
+        return GroundingLlmCallResult(
+            raw_text=json.dumps(parsed, separators=(",", ":")),
+            finish_reason=finish_reason,
+            max_output_tokens=max_tokens,
+            usage=usage,
+            parsed=parsed,
+        )
+
     raw = _extract_anthropic_text(response)
     if not raw.strip():
         raise ValueError("Anthropic returned empty content.")
-    stop_reason = getattr(response, "stop_reason", None)
     return GroundingLlmCallResult(
         raw_text=raw,
-        finish_reason=str(stop_reason) if stop_reason is not None else None,
+        finish_reason=finish_reason,
         max_output_tokens=max_tokens,
-        usage=_anthropic_usage_dict(getattr(response, "usage", None)),
+        usage=usage,
     )
 
 
@@ -259,18 +305,25 @@ def _call_grounding_llm_raw(
     page_manifest: dict[str, Any],
     compact_json: bool,
     include_attachment_manifest: bool,
+    label_anchors: list[dict[str, Any]] | None = None,
+    highlighted_png: Path | None = None,
 ) -> GroundingLlmCallResult:
     slim_lines = settings.grounding_slim_line_detection
+    # Structured provider outputs are used on the initial attempt; the compact-JSON retry is
+    # a thin text fallback that turns structured mode off.
+    structured = settings.grounding_structured_outputs and not compact_json
+    image_path = highlighted_png or paths["highlighted"]
     if provider == "openai":
         if openai_client is None:
             raise ValueError("OpenAI client not configured.")
         messages = build_openai_messages(
-            highlighted_png=paths["highlighted"],
+            highlighted_png=image_path,
             detected_lines=detected_lines,
             page_manifest=page_manifest,
             compact_json=compact_json,
             include_attachment_manifest=include_attachment_manifest,
             slim_line_detection=slim_lines,
+            label_anchors=label_anchors,
         )
         return _call_openai_grounding_raw(
             client=openai_client,
@@ -278,17 +331,19 @@ def _call_grounding_llm_raw(
             messages=messages,
             timeout_seconds=settings.openai_timeout_seconds,
             max_output_tokens=settings.grounding_openai_max_output_tokens,
+            structured=structured,
         )
 
     if anthropic_client is None:
         raise ValueError("Anthropic client not configured.")
     system_text, user_content = build_anthropic_messages(
-        highlighted_png=paths["highlighted"],
+        highlighted_png=image_path,
         detected_lines=detected_lines,
         page_manifest=page_manifest,
         compact_json=compact_json,
         include_attachment_manifest=include_attachment_manifest,
         slim_line_detection=slim_lines,
+        label_anchors=label_anchors,
     )
     return _call_anthropic_grounding_raw(
         client=anthropic_client,
@@ -297,9 +352,8 @@ def _call_grounding_llm_raw(
         user_content=user_content,
         timeout_seconds=settings.anthropic_timeout_seconds,
         max_tokens=settings.grounding_anthropic_max_tokens,
+        structured=structured,
     )
-
-    raise ValueError(f"Unsupported provider: {provider}")
 
 
 def _fetch_grounding_payload(
@@ -316,8 +370,15 @@ def _fetch_grounding_payload(
     page_manifest: dict[str, Any],
     compact_json: bool = False,
     include_attachment_manifest: bool = True,
+    label_anchors: list[dict[str, Any]] | None = None,
+    highlighted_png: Path | None = None,
 ) -> dict[str, Any]:
-    """Call vision API and parse JSON; retry once with compact-json instructions on JSONDecodeError."""
+    """Call the vision API and return an adapted payload.
+
+    Structured provider outputs (OpenAI json_schema / Anthropic tool-use) make parse failures
+    essentially impossible; the compact-JSON retry remains only as a thin fallback for the
+    unstructured path.
+    """
     attempt = _grounding_attempt_label(compact_json=compact_json)
     call = _call_grounding_llm_raw(
         provider=provider,
@@ -330,6 +391,8 @@ def _fetch_grounding_payload(
         page_manifest=page_manifest,
         compact_json=compact_json,
         include_attachment_manifest=include_attachment_manifest,
+        label_anchors=label_anchors,
+        highlighted_png=highlighted_png,
     )
     _log_grounding_llm_usage(
         job_id=job_id,
@@ -340,11 +403,16 @@ def _fetch_grounding_payload(
         call=call,
     )
     try:
-        parsed = _parse_grounding_json(
-            provider=provider,
-            raw_text=call.raw_text,
-            finish_reason=call.finish_reason,
-        )
+        if call.parsed is not None:
+            if _is_output_truncated(provider=provider, finish_reason=call.finish_reason):
+                raise OutputTruncatedError(OUTPUT_TRUNCATED_MESSAGE)
+            parsed = call.parsed
+        else:
+            parsed = _parse_grounding_json(
+                provider=provider,
+                raw_text=call.raw_text,
+                finish_reason=call.finish_reason,
+            )
         return adapt_grounding_response(parsed)
     except json.JSONDecodeError:
         if compact_json:
@@ -363,6 +431,8 @@ def _fetch_grounding_payload(
             page_manifest=page_manifest,
             compact_json=True,
             include_attachment_manifest=include_attachment_manifest,
+            label_anchors=label_anchors,
+            highlighted_png=highlighted_png,
         )
 
 
@@ -404,7 +474,9 @@ def _apply_normalize(
     )
 
 
-_PERSISTED_FIELD_DROP_KEYS = frozenset({"nearby_label_text", "supporting_lines", "field_surface"})
+_PERSISTED_FIELD_DROP_KEYS = frozenset(
+    {"nearby_label_text", "supporting_lines", "field_surface", "anchor", "_anchored"}
+)
 
 
 def _field_for_stamp_storage(field: dict[str, Any]) -> dict[str, Any]:
@@ -422,6 +494,52 @@ def _field_for_stamp_storage(field: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("reviewed", False)
     out.setdefault("font_size_pt", None)
     return out
+
+
+def _resolve_label_anchors(
+    *,
+    output_dir: Path,
+    page_index: int,
+    page_manifest: dict[str, Any],
+    settings: Settings,
+) -> list[dict[str, Any]]:
+    """Best-effort label anchors from the digital PDF text layer (empty for scanned PDFs)."""
+    if not settings.grounding_label_anchors:
+        return []
+    input_pdf = output_dir.parent / "input.pdf"
+    try:
+        return extract_label_anchors(
+            input_pdf=input_pdf,
+            page_index=page_index,
+            page_manifest=page_manifest,
+        )
+    except Exception as exc:  # pragma: no cover - defensive; never fail grounding on anchors
+        LOG.warning("label anchor extraction failed page=%d: %s", page_index, exc)
+        return []
+
+
+def _resolve_highlighted_image(
+    *,
+    paths: dict[str, Path],
+    page_index: int,
+    settings: Settings,
+) -> Path:
+    """Return the page image to send the model, optionally with a labeled coordinate grid."""
+    base = paths["highlighted"]
+    if not settings.grounding_grid_overlay_enabled:
+        return base
+    try:
+        from app.services.grid_overlay import build_grid_overlay_image
+
+        dst = base.with_name(base.stem + "_grid.png")
+        return build_grid_overlay_image(
+            base,
+            dst,
+            spacing_px=settings.grounding_grid_overlay_spacing_px,
+        )
+    except Exception as exc:  # pragma: no cover - overlay is an accuracy aid, never required
+        LOG.warning("grid overlay failed page=%d: %s", page_index, exc)
+        return base
 
 
 def ground_one_page(
@@ -447,6 +565,18 @@ def ground_one_page(
         line_padding_px=settings.grounding_line_padding_px,
     )
 
+    label_anchors = _resolve_label_anchors(
+        output_dir=output_dir,
+        page_index=page_index,
+        page_manifest=page_manifest,
+        settings=settings,
+    )
+    highlighted_png = _resolve_highlighted_image(
+        paths=paths,
+        page_index=page_index,
+        settings=settings,
+    )
+
     raw_response = _fetch_grounding_payload(
         job_id=job_id,
         provider=provider,
@@ -460,6 +590,20 @@ def ground_one_page(
         page_manifest=page_manifest,
         compact_json=False,
         include_attachment_manifest=True,
+        label_anchors=label_anchors,
+        highlighted_png=highlighted_png,
+    )
+
+    # Anchor-first: compute deterministic bboxes for fields that reference cells / lines /
+    # labels before the geometry-snapping fallback runs on the remaining pixel estimates.
+    img_w, img_h = _page_image_dimensions(page_manifest)
+    raw_response = apply_anchor_grounding(
+        raw_response,
+        geometry,
+        label_anchors,
+        page_w=img_w,
+        page_h=img_h,
+        stamp_inset_px=settings.grounding_stamp_inset_px,
     )
 
     raw_response = _apply_normalize(
@@ -570,41 +714,72 @@ def run_semantic_grounding_for_job(
     targets = sorted(idx for idx, _ in page_entries)
 
     job_root_dir = output_dir.parent
+    progress_lock = threading.Lock()
     try:
         from app.services.jobs import read_job_manifest, update_job_stage
 
         read_job_manifest(job_root_dir)
-        update_job_stage(job_root_dir, "grounding", status="running")
+        update_job_stage(
+            job_root_dir,
+            "grounding",
+            status="running",
+            grounded_pages=0,
+            total_pages=len(targets),
+        )
     except FileNotFoundError:
         pass
+
+    def _record_progress(done: int) -> None:
+        """Thread-safe incremental grounded-page count for GET /jobs/{id} polling."""
+        try:
+            from app.services.jobs import update_job_stage as _update_stage
+
+            with progress_lock:
+                _update_stage(job_root_dir, "grounding", grounded_pages=done)
+        except FileNotFoundError:
+            pass
+
+    def _ground(page_index: int) -> dict[str, Any]:
+        return ground_one_page(
+            job_id=job_id,
+            output_dir=output_dir,
+            page_index=page_index,
+            provider=prov,
+            model=resolved_model,
+            settings=settings,
+            openai_client=openai_client,
+            anthropic_client=anthropic_client,
+        )
 
     succeeded: list[dict[str, Any]] = []
     failed_pages: list[dict[str, Any]] = []
 
-    for page_index in targets:
-        try:
-            result = ground_one_page(
-                job_id=job_id,
-                output_dir=output_dir,
-                page_index=page_index,
-                provider=prov,
-                model=resolved_model,
-                settings=settings,
-                openai_client=openai_client,
-                anthropic_client=anthropic_client,
-            )
-            succeeded.append(result)
-        except Exception as exc:
-            LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
-            err_detail: Any = str(exc)
-            failed_pages.append(
-                {
-                    "page_index": page_index,
-                    "status": "failed",
-                    "error": type(exc).__name__,
-                    "detail": err_detail,
-                }
-            )
+    # Bounded parallelism: a multi-page form grounds in roughly the time of its slowest
+    # pages, not the sum. Each page is isolated so one failure never sinks the others.
+    max_workers = max(1, min(settings.grounding_max_concurrency, len(targets)))
+    results_by_page: dict[int, dict[str, Any]] = {}
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_page = {executor.submit(_ground, idx): idx for idx in targets}
+        for future in as_completed(future_to_page):
+            page_index = future_to_page[future]
+            try:
+                results_by_page[page_index] = future.result()
+                completed += 1
+                _record_progress(completed)
+            except Exception as exc:
+                LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
+                failed_pages.append(
+                    {
+                        "page_index": page_index,
+                        "status": "failed",
+                        "error": type(exc).__name__,
+                        "detail": str(exc),
+                    }
+                )
+
+    succeeded = [results_by_page[idx] for idx in sorted(results_by_page)]
+    failed_pages.sort(key=lambda fp: fp.get("page_index", 0))
 
     if not succeeded:
         raise SemanticGroundingJobError(
