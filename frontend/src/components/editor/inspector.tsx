@@ -1,4 +1,14 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Minus, Plus, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CheckCircle2,
+  Minus,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +45,16 @@ export function Inspector() {
               <p className="mt-1 text-sm font-semibold text-slate-800">{field.field_id}</p>
               {field.label && <p className="text-xs text-slate-400">{field.label}</p>}
             </div>
+
+            {field.qa_status === "flagged" && (
+              <div
+                data-testid="inspector-flagged"
+                className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>Vision QA flagged this field&mdash;check its position and value.</span>
+              </div>
+            )}
 
             {field.type === "checkbox" || field.type === "radio" ? (
               <div>
@@ -198,6 +218,11 @@ export function Inspector() {
                     </span>
                     {f.reviewed ? (
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+                    ) : f.qa_status === "flagged" ? (
+                      <AlertTriangle
+                        className="h-4 w-4 shrink-0 text-amber-500"
+                        aria-label="Flagged by vision QA"
+                      />
                     ) : (
                       <span className="h-4 w-4 shrink-0 rounded-full border-2 border-slate-300" />
                     )}
