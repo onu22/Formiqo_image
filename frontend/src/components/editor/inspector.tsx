@@ -1,4 +1,14 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Minus, Plus, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CheckCircle2,
+  Minus,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +45,19 @@ export function Inspector() {
               <p className="mt-1 text-sm font-semibold text-slate-800">{field.field_id}</p>
               {field.label && <p className="text-xs text-slate-400">{field.label}</p>}
             </div>
+
+            {field.qa_status === "flagged" && (
+              <div
+                data-testid="inspector-flagged"
+                className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>
+                  QA flagged this field &mdash; the vision check could not confirm its placement.
+                  Please verify its position on the page.
+                </span>
+              </div>
+            )}
 
             {field.type === "checkbox" || field.type === "radio" ? (
               <div>
@@ -196,6 +219,13 @@ export function Inspector() {
                       <span className="block truncate font-medium text-slate-700">{fieldId}</span>
                       <span className="block truncate text-xs text-slate-400">{preview || "\u2014"}</span>
                     </span>
+                    {f.qa_status === "flagged" && (
+                      <AlertTriangle
+                        data-testid={`field-list-flagged-${fieldId}`}
+                        className="h-4 w-4 shrink-0 text-amber-500"
+                        aria-label="QA flagged"
+                      />
+                    )}
                     {f.reviewed ? (
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
                     ) : (
