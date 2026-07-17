@@ -24,6 +24,7 @@ from app.schemas import (
     PatchFieldsResponse,
     PatchValuesRequest,
     PatchValuesResponse,
+    RefineGroundingResponse,
     StampImagesRunResponse,
     StampPdfRunResponse,
     StampingJson,
@@ -324,6 +325,33 @@ async def stamp_pdf(job_id: str, settings: Settings = Depends(get_settings)) -> 
         run_id=result["stamp_run_id"],
         download_url=f"/api/v1/jobs/{job_id}/export",
     )
+
+
+@router.post(
+    "/jobs/{job_id}/refine-grounding",
+    response_model=RefineGroundingResponse,
+    status_code=202,
+    summary="Run the vision QA refinement loop (E5)",
+)
+async def refine_grounding(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    settings: Settings = Depends(get_settings),
+) -> RefineGroundingResponse:
+    root, _, output_dir = _resolve_job(settings, job_id)
+    if not (output_dir / "field_grounding").is_dir():
+        raise ApiHttpError(400, "fields_not_found", "Grounded fields not found for this job")
+
+    from app.services.grounding_qa import run_refine_grounding_task
+
+    background_tasks.add_task(
+        run_refine_grounding_task,
+        job_id=job_id,
+        job_root=root,
+        output_dir=output_dir,
+        settings=settings,
+    )
+    return RefineGroundingResponse(status="running")
 
 
 @router.get(

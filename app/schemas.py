@@ -98,6 +98,13 @@ class StampPdfRunResponse(BaseModel):
     download_url: str
 
 
+class RefineGroundingResponse(BaseModel):
+    """``POST /jobs/{id}/refine-grounding`` accepted; poll ``GET /jobs/{id}`` for
+    ``stages.qa_refine`` (E5)."""
+
+    status: str = "running"
+
+
 class FormLineDetectorConfig(BaseModel):
     """Optional OpenCV overrides for ``POST /user-uploads/process-convert-line-detect`` body ``config``."""
 

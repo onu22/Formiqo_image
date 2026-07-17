@@ -57,6 +57,16 @@ def load_grounding_user_prompt() -> str:
     return _load_prompt_file("grounding_user.md")
 
 
+def load_grounding_qa_system_prompt() -> str:
+    """System prompt for the E5 per-field placement judge."""
+    return _load_prompt_file("grounding_qa_system.md")
+
+
+def load_grounding_qa_user_prompt() -> str:
+    """User instructions for the E5 per-field placement judge."""
+    return _load_prompt_file("grounding_qa_user.md")
+
+
 def _compact_json(data: Any) -> str:
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 

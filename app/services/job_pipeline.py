@@ -95,6 +95,18 @@ def run_full_job_pipeline(
             provider=settings.grounding_provider,
             model=settings.grounding_model,
         )
+
+        # E5: optional QA refinement as the final pipeline stage (config toggle). Isolated so
+        # a judge/API failure never regresses a successfully grounded job.
+        if settings.grounding_qa_auto_run:
+            from app.services.grounding_qa import run_refine_grounding_task
+
+            run_refine_grounding_task(
+                job_id=job_id,
+                job_root=job_root,
+                output_dir=output_dir,
+                settings=settings,
+            )
     except SemanticGroundingJobError as exc:
         LOG.warning("job pipeline grounding failed job_id=%s: %s", job_id, exc)
         manifest = read_job_manifest(job_root)

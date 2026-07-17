@@ -111,6 +111,43 @@ class Settings(BaseSettings):
         le=50,
         description="Max spread (max-min) of delta components on an axis to treat as consensus.",
     )
+    grounding_qa_auto_run: bool = Field(
+        default=False,
+        description=(
+            "Run the E5 vision QA refinement loop automatically as the final stage of the "
+            "background job pipeline. Off by default to bound token/latency cost."
+        ),
+    )
+    grounding_qa_judge_provider: str = Field(
+        default="",
+        description=(
+            "Provider for the E5 QA judge (openai or anthropic). Empty picks a different "
+            "provider than the grounder when its API key is present, to avoid correlated "
+            "blind spots; otherwise falls back to the grounder's provider."
+        ),
+    )
+    grounding_qa_judge_model: str = Field(
+        default="",
+        description="Model id for the E5 QA judge; empty uses the provider default.",
+    )
+    grounding_qa_crop_zoom: float = Field(
+        default=3.0,
+        ge=1.0,
+        le=10.0,
+        description="Context multiplier for per-field judge crops around the stamped bbox (~3x).",
+    )
+    grounding_qa_crop_padding_px: int = Field(
+        default=24,
+        ge=0,
+        le=200,
+        description="Minimum extra padding (px) around a field bbox when cropping the judge view.",
+    )
+    grounding_qa_min_confidence: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+        description="Judge confidence below which a field is marked qa_status=flagged for review.",
+    )
     grounding_line_padding_px: int = Field(
         default=3,
         ge=0,
