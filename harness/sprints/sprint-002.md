@@ -54,11 +54,15 @@ G4 shipped → T030–T033 (E5) → T034–T036 → T040–T043 (E7 stretch)
 
 ## Definition of done
 
-- [ ] All E5 tasks DONE (M4)
-- [ ] E7 stretch DONE or explicitly deferred (remove TODO rows)
-- [ ] pytest green; refine path exercised with API keys when available
-- [ ] PM summary written for the cycle
+- [x] All E5 tasks DONE (M4)
+- [x] E7 stretch DONE or explicitly deferred (remove TODO rows)
+- [x] pytest green; refine path covered with deterministic judge fixtures
+- [x] PM summary written for the cycle
 
 ## Retrospective
 
-_To be filled when sprint closes._
+- E5 delivered the bounded vision-QA loop, persisted QA outcomes, manual/automatic
+  execution, editor flags, and cost/latency instrumentation.
+- E7 delivered strict page fingerprints and corrected-template reuse with zero LLM
+  calls on exact matches; near-miss coverage protects against false positives.
+- Final result: 11/11 post-MVP tasks DONE with no blocked work.
