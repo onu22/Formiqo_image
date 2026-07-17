@@ -57,7 +57,7 @@ G4 shipped → T030–T033 (E5) → T034–T036 → T040–T043 (E7 stretch)
 - [x] All E5 tasks DONE (M4)
 - [x] E7 stretch DONE (T040–T043); template reuse skips LLM on fingerprint match
 - [x] pytest green; refine path exercised with API keys when available (deterministic paths green; live judge pending keys)
-- [ ] PM summary written for the cycle
+- [x] PM summary written for the cycle
 
 ## Retrospective
 

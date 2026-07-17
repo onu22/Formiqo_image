@@ -50,3 +50,47 @@ REASON=Post-MVP M5 stretch — E7 template memory
 ```
 
 No hard blocker is present. The conductor continues to E7.
+
+## Cycle 2 — E7 template memory
+
+The LLM Engineer completed sprint tasks T040–T043:
+
+- Deterministic, normalized page fingerprints from detected-line layouts.
+- Atomic filesystem template index under `data/`.
+- Capture only from human-corrected field saves.
+- Reuse corrected fields on matching uploads with `grounding_source: template`.
+- Skip the LLM for matched pages, including mixed matched/unmatched documents.
+- Scale-invariance, jitter, near-miss, false-positive, and round-trip tests.
+
+Acceptance evidence:
+
+- Same-layout re-upload reaches `ready` with the corrected bbox preserved and zero LLM calls.
+- Near-miss line layouts produce different fingerprints and do not reuse templates.
+- Fully templated jobs do not need provider API keys.
+
+Verification:
+
+- E7 focused suite: `17 passed`.
+- Final full backend suite: `88 passed, 1 deprecation warning`.
+- Harness shell syntax check: passed.
+
+Commits: `4c18132`, `bab6d2a`, `400d35e`, `b8147fa`.
+
+## Final conductor result
+
+The completion path initially emitted a shell warning because it invoked `epic_present` as a
+`[` expression. Commit `dad223d` corrected that check and the human and JSON next-action
+outputs now run without warnings.
+
+Final `harness-next.sh` result:
+
+```text
+ACTION=complete
+TARGET=post-MVP
+AGENT=product-manager
+REASON=G4 shipped; E5 and E7 complete — post-MVP done
+```
+
+Sprint 002 contains `DONE=11`, `TODO=0`, `BLOCKED=0`. G4 remains QA APPROVED, E5 is
+complete, and queued stretch epic E7 is complete. The authorized conductor stop condition is
+met with no hard blocker.
