@@ -35,12 +35,15 @@ G1 Architecture sign-off
   → E2 | E3 | E4 (parallel)
   → G2 Parity (blocks E5)
   → G3 Security (blocks E6 integration)
-  → E5 QA refine loop
   → E6 Review UI
   → G4 Ship review
   → MVP ship
-  → E7 Template memory (stretch)
+  → E5 QA refine loop (M4 — post-ship if not done earlier)
+  → E7 Template memory (stretch M5)
+  → Post-MVP complete
 ```
+
+`/run-mvp` and Cursor Automation continue past G4 until E5 is done (and E7 if queued on the active sprint). See [`RUN-MVP.md`](RUN-MVP.md).
 
 ## Non-Negotiable Gates
 

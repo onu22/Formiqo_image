@@ -16,7 +16,7 @@ This repo uses a **static multi-agent harness** to deliver [`docs/PRD.md`](docs/
 
 ## Commands
 
-- **`/run-mvp`** — autonomous conductor to MVP ship (sit and wait)
+- **`/run-mvp`** — autonomous conductor through G4 MVP ship, then post-MVP E5/E7 (sit and wait)
 - `/pm` — PM orchestration
 - `/epic E1` — run one epic with correct role
 - `/gate G1` — quality gate review

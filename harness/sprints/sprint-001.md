@@ -1,9 +1,9 @@
 ---
 sprint_number: sprint-001
-status: active
+status: closed
 start_date: 2026-07-12
 end_date: 2026-07-26
-closed_date:
+closed_date: 2026-07-17
 project: formiqo-mvp
 goal: G1 sign-off plus E1 data cleanup and E3 API skeleton — UI-ready backend (M1)
 ---
@@ -71,8 +71,21 @@ T001–T003 → T004 (G1) → T005 → T011 → T016 → G3 → E6 integration (
 - [x] E1 acceptance criteria from PRD met
 - [x] E3 integration test passes
 - [x] G4 QA APPROVED (2026-07-14) — MVP ship unblocked
-- [ ] Sprint retro filled via `/sprint-plan` close or manual edit
+- [x] Sprint retro filled via `/sprint-plan` close or manual edit
 
 ## Retrospective
 
-_To be filled when sprint closes._
+### What went well
+
+- G1–G4 signed; E1–E4 and E6 landed; MVP ship unblocked (`ACTION=complete` under old conductor).
+- Live upload → ground → edit → export validated on a real form (2026-07-17).
+
+### What didn't
+
+- Old `harness-next.sh` short-circuited on G4, so Cursor Automation could not continue into E5/E7.
+- Sprint-001 goal text stayed M1-era after M2/M3 work landed in the same backlog.
+
+### Action items
+
+- Opened **sprint-002** for post-MVP M4 (E5) + stretch M5 (E7).
+- Updated conductor + automation prompt to continue past G4.

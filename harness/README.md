@@ -49,11 +49,13 @@ Optional Cursor Automation: [`automation/run-mvp-prompt.md`](automation/run-mvp-
 
 - **PRD:** Approved (`docs/PRD.md`)
 - **G1:** APPROVED WITH CONDITIONS (2026-07-12)
-- **G2:** PENDING — needs E2 parity + golden tests
+- **G2:** QA APPROVED (2026-07-13)
 - **G3:** APPROVED WITH CONDITIONS (2026-07-12)
-- **G4:** PENDING — needs E6 + ship review
-- **Active sprint:** `sprint-001` (E1/E3 done; E2, E4, E6 TODO)
-- **Next `/run-mvp` action:** run `./scripts/harness-next.sh`
+- **G4:** QA APPROVED (2026-07-14) — MVP ship unblocked
+- **Active sprint:** `sprint-002` (post-MVP: E5 + stretch E7)
+- **Next `/run-mvp` action:** run `./scripts/harness-next.sh` (expect `ACTION=epic` / `TARGET=E5`)
+
+Conductor continues past G4 into E5/E7. See [`RUN-MVP.md`](RUN-MVP.md) and [`automation/run-mvp-prompt.md`](automation/run-mvp-prompt.md).
 
 ## Adding a gate sign-off
 

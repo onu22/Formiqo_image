@@ -1,11 +1,11 @@
 ---
 name: run-mvp
-description: Autonomous Formiqo MVP harness — run gates, epics, and sprints to ship without manual /epic or /gate commands. Sit-and-wait orchestration via PM conductor loop.
+description: Autonomous Formiqo harness conductor — gates and epics through G4 MVP ship, then post-MVP E5 and stretch E7 via automation-friendly PM loop.
 ---
 
-# Formiqo Autonomous MVP Runner (`/run-mvp`)
+# Formiqo Autonomous Runner (`/run-mvp`)
 
-Run the **full harness to MVP ship** without the user typing `/epic` or `/gate` between steps.
+Run the harness through **MVP ship (G4)** and **continue into post-MVP** (**E5**, then stretch **E7**) without the user typing `/epic` or `/gate` between steps.
 
 **Playbook:** [`harness/RUN-MVP.md`](../../harness/RUN-MVP.md)  
 **Next-action hint:** `./scripts/harness-next.sh`  
@@ -25,24 +25,25 @@ Act as **Product Manager** per [`.cursor/agents/product-manager.md`](../../.curs
 2. **Do not pause** between steps unless:
    - A gate is **BLOCKED** and needs a human product decision
    - A task is **BLOCKED** with no automatic resolution
-   - **G4 QA APPROVED** — MVP ship complete; stop and celebrate
+   - **`ACTION=complete`** (post-MVP done — E5 finished; E7 finished or not queued)
    - Context window is exhausted — write resume artifact (below) and tell user to send `/run-mvp continue`
-3. **Never bypass gates** — run gate reviews when criteria are met.
-4. **Update sprint** task statuses (`IN_PROGRESS` → `DONE` / `BLOCKED`) after each delegation.
-5. **Write PM summary** after each major cycle: `harness/specs/pm-summary-run-mvp-<date>.md`.
+3. **G4 QA APPROVED is not a stop.** After ship, keep looping on E5 → E7 (or `sprint-plan` if post-MVP backlog is missing).
+4. **Never bypass gates** — run gate reviews when criteria are met.
+5. **Update sprint** task statuses (`IN_PROGRESS` → `DONE` / `BLOCKED`) after each delegation.
+6. **Write PM summary** after each major cycle: `harness/specs/pm-summary-run-mvp-<date>.md`.
 
 ### Loop (repeat until stop condition)
 
 ```
-while not MVP_SHIPPED and not HARD_BLOCKED:
+while not POST_MVP_COMPLETE and not HARD_BLOCKED:
   1. Run: ./scripts/harness-next.sh
   2. Read output ACTION, TARGET, AGENT, REASON
-  3. If ACTION=complete → stop (G4 approved)
+  3. If ACTION=complete → stop (post-MVP done; report G4 ship + E5/E7 status)
   4. If ACTION=blocked → stop; report blocker to user
   5. If ACTION=gate → Task(subagent=AGENT, prompt="Run /gate {TARGET} per gate-review skill")
   6. If ACTION=epic → Task(subagent=AGENT, prompt="Run /epic {TARGET} per epic skill; full PRD acceptance criteria")
-  7. If ACTION=sprint-plan → Task(subagent=product-manager, prompt="Close sprint and plan next via /sprint-plan")
-  8. Verify: pytest green for backend changes; update sprint; append pm-summary
+  7. If ACTION=sprint-plan → Task(subagent=product-manager, prompt="Plan post-MVP sprint via /sprint-plan; include E5 TODO and optional E7 stretch")
+  8. Verify: pytest green for backend/LLM changes; update sprint; append pm-summary
   9. Continue immediately to next iteration (no user prompt)
 ```
 
@@ -56,12 +57,13 @@ while not MVP_SHIPPED and not HARD_BLOCKED:
 | E1, E2, E3 | `backend-developer` | epic |
 | E4, E5, E7 | `llm-engineer` | epic |
 | E6 | `frontend-developer` | epic |
+| sprint-plan | `product-manager` | sprint-plan |
 
 When spawning Task agents, include in the prompt:
 
 - Read the epic/gate section in `docs/PRD.md`
 - Read `harness/RUN-MVP.md` for pipeline position
-- Follow the matching skill (`epic` or `gate-review`)
+- Follow the matching skill (`epic`, `gate-review`, or `sprint-plan`)
 - Return: acceptance criteria checklist, files changed, blockers
 
 ### Parallel work
@@ -82,7 +84,7 @@ When `harness-next.sh` reports `PARALLEL= yes` and lists multiple targets, launc
 
 | Outcome | User message |
 |---------|----------------|
-| **MVP shipped** | G4 QA APPROVED; link gate file and pm-summary |
+| **Post-MVP complete** | Link pm-summary; note G4 ship + E5/E7 status |
 | **Hard blocked** | Name gate/epic, reason, what human must decide |
 | **Context limit** | "Send `/run-mvp continue` to resume" + path to pm-summary |
 
@@ -91,4 +93,5 @@ When `harness-next.sh` reports `PARALLEL= yes` and lists multiple targets, launc
 - Implement large code changes directly (delegate to role agents)
 - Skip pytest after backend/LLM epics
 - Mark gates APPROVED without gate owner review
-- Run E7 unless E1–E6 and G4 are done (stretch)
+- Stop solely because G4 is QA APPROVED
+- Run E7 before E5 TODO rows are cleared (stretch after M4)

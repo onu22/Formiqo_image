@@ -1,15 +1,15 @@
-# Autonomous MVP Conductor Playbook
+# Autonomous MVP + Post-MVP Conductor Playbook
 
 **Command:** `/run-mvp` in Cursor (skill: [`.cursor/skills/run-mvp/`](../.cursor/skills/run-mvp/SKILL.md))
 
-Runs the Formiqo harness from current state to **G4 QA APPROVED** (MVP ship) without manual `/epic` or `/gate` between steps.
+Runs the Formiqo harness from current state through **G4 QA APPROVED** (MVP ship), then continues into **post-MVP** work (**E5**, then stretch **E7**) without manual `/epic` or `/gate` between steps.
 
 ## Machine-readable next action
 
 ```bash
-./scripts/harness-next.sh          # human-readable
-./scripts/harness-next.sh --json   # for agents
 ./scripts/harness-status.sh        # gates + sprint counts
+./scripts/harness-next.sh          # human-readable
+./scripts/harness-next.sh --json   # for agents / automation
 ```
 
 ## Pipeline (target end state)
@@ -26,8 +26,9 @@ flowchart LR
     G3 --> E6[E6 UI]
     E4 --> E5
     E6 --> G4[G4 QA APPROVED]
-    E5 --> Ship[MVP ship]
-    G4 --> Ship
+    G4 --> E5
+    E5 --> E7[E7 stretch]
+    E7 --> Done[Post-MVP complete]
 ```
 
 ## Gate open rules
@@ -41,9 +42,11 @@ flowchart LR
 
 A gate **blocks** downstream work only as defined in [`specs/delegation-plan-mvp.md`](specs/delegation-plan-mvp.md).
 
+**After G4:** the conductor does **not** stop. It runs post-MVP backlog (E5 → E7).
+
 ## Autonomous priority (what `/run-mvp` runs next)
 
-When multiple epics are unblocked, pick in this order:
+### While G4 is not QA APPROVED (MVP)
 
 | Priority | Condition | Action |
 |----------|-----------|--------|
@@ -54,10 +57,16 @@ When multiple epics are unblocked, pick in this order:
 | 5 | E2 done, G2 not QA APPROVED | `/gate G2` |
 | 6 | G2 approved, E4 done, E5 not done | `/epic E5` |
 | 7 | E6 done, G4 not QA APPROVED | `/gate G4` |
-| 8 | All sprint TODO done, G4 approved | **COMPLETE** — MVP ship |
-| 9 | Sprint empty but work remains | `/sprint-plan` — extend backlog |
+| 8 | Sprint empty, G4 still pending | `/sprint-plan` |
 
-**Stretch:** E7 only after G4 approved.
+### After G4 QA APPROVED (post-MVP)
+
+| Priority | Condition | Action |
+|----------|-----------|--------|
+| 1 | E5 has TODO rows | `/epic E5` |
+| 2 | E7 has TODO rows | `/epic E7` |
+| 3 | No E5 rows on active sprint | `/sprint-plan` — add post-MVP backlog |
+| 4 | E5 done and E7 done (or E7 not queued) | **COMPLETE** — post-MVP done |
 
 ## Parallelization policy
 
@@ -78,6 +87,9 @@ The conductor **stops and asks** only when:
 2. Epic acceptance criteria cannot be met without PRD change
 3. Merge conflict or test failure after 2 fix attempts
 4. Missing secret (API key) for LLM epics — document env vars needed
+5. **`ACTION=complete`** with target `post-MVP` (E5 done; E7 done or not queued)
+
+MVP ship (G4) is a **milestone**, not a hard stop for automation.
 
 ## Artifacts per cycle
 
@@ -87,5 +99,6 @@ The conductor **stops and asks** only when:
 
 ## Cursor Automation
 
-Optional scheduled kickoff: see [`automation/run-mvp-prompt.md`](automation/run-mvp-prompt.md).  
-Open Automations UI: run `/run-mvp` once manually, or use the automation template created in-repo.
+Optional scheduled kickoff: see [`automation/run-mvp-prompt.md`](automation/run-mvp-prompt.md).
+
+**Important:** After updating the repo prompt, paste the new prompt into your existing Cursor Automation (the dashboard copy does not auto-sync from git).

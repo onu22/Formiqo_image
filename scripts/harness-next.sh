@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Compute the next autonomous harness action for /run-mvp.
+# Continues past G4 into post-MVP work (E5, then stretch E7).
 # Usage: ./scripts/harness-next.sh [--json]
 set -euo pipefail
 
@@ -46,6 +47,13 @@ sprint_file() {
   fi
 }
 
+sprint_todo_count() {
+  local sf
+  sf=$(sprint_file)
+  [[ -f "$sf" ]] || { echo 0; return; }
+  grep -c '| TODO |' "$sf" 2>/dev/null || true
+}
+
 epic_todo() {
   local epic="$1"
   local sf
@@ -54,16 +62,27 @@ epic_todo() {
   grep -E "\\| T[0-9]+ \\| ${epic} \\|" "$sf" 2>/dev/null | grep -q '| TODO |'
 }
 
+epic_present() {
+  local epic="$1"
+  local sf
+  sf=$(sprint_file)
+  [[ -f "$sf" ]] || return 1
+  grep -qE "\\| T[0-9]+ \\| ${epic} \\|" "$sf" 2>/dev/null
+}
+
 epic_done() {
   local epic="$1"
   local sf
   sf=$(sprint_file)
   [[ -f "$sf" ]] || return 1
+  epic_present "$epic" || return 1
   local todo
   todo=$(grep -E "\\| T[0-9]+ \\| ${epic} \\|" "$sf" 2>/dev/null | grep -c '| TODO |' || true)
   local blocked
   blocked=$(grep -E "\\| T[0-9]+ \\| ${epic} \\|" "$sf" 2>/dev/null | grep -c '| BLOCKED |' || true)
-  [[ "$todo" -eq 0 ]] && [[ "$blocked" -eq 0 ]]
+  local inprog
+  inprog=$(grep -E "\\| T[0-9]+ \\| ${epic} \\|" "$sf" 2>/dev/null | grep -cE '\| (IN_PROGRESS|IN_REVIEW) \|' || true)
+  [[ "$todo" -eq 0 ]] && [[ "$blocked" -eq 0 ]] && [[ "$inprog" -eq 0 ]]
 }
 
 G1=$(gate_status G1-architecture)
@@ -78,39 +97,30 @@ REASON=""
 PARALLEL="no"
 EXTRA=""
 
-# MVP complete
-if [[ "$G4" == "QA APPROVED" ]]; then
-  ACTION="complete"
-  TARGET="MVP"
-  REASON="G4 QA APPROVED — MVP shippable"
-  AGENT="product-manager"
-fi
-
 # Hard gate blocks
-if [[ -z "$ACTION" ]]; then
-  if [[ "$G1" == "BLOCKED" ]]; then
-    ACTION="blocked"
-    TARGET="G1"
-    REASON="G1 architecture gate BLOCKED — human decision required"
-    AGENT="solution-architect"
-  elif [[ "$G2" == "BLOCKED" ]]; then
-    ACTION="blocked"
-    TARGET="G2"
-    REASON="G2 parity gate BLOCKED"
-    AGENT="qa-specialist"
-  elif [[ "$G3" == "BLOCKED" ]]; then
-    ACTION="blocked"
-    TARGET="G3"
-    REASON="G3 security gate BLOCKED"
-    AGENT="security-reviewer"
-  elif [[ "$G4" == "BLOCKED" ]]; then
-    ACTION="blocked"
-    TARGET="G4"
-    REASON="G4 ship gate BLOCKED"
-    AGENT="qa-specialist"
-  fi
+if [[ "$G1" == "BLOCKED" ]]; then
+  ACTION="blocked"
+  TARGET="G1"
+  REASON="G1 architecture gate BLOCKED — human decision required"
+  AGENT="solution-architect"
+elif [[ "$G2" == "BLOCKED" ]]; then
+  ACTION="blocked"
+  TARGET="G2"
+  REASON="G2 parity gate BLOCKED"
+  AGENT="qa-specialist"
+elif [[ "$G3" == "BLOCKED" ]]; then
+  ACTION="blocked"
+  TARGET="G3"
+  REASON="G3 security gate BLOCKED"
+  AGENT="security-reviewer"
+elif [[ "$G4" == "BLOCKED" ]]; then
+  ACTION="blocked"
+  TARGET="G4"
+  REASON="G4 ship gate BLOCKED"
+  AGENT="qa-specialist"
 fi
 
+# --- Pre-G4 MVP pipeline ---
 if [[ -z "$ACTION" ]] && [[ "$G4" != "QA APPROVED" ]]; then
   if ! gate_open "$G1"; then
     ACTION="gate"
@@ -184,20 +194,11 @@ if [[ -z "$ACTION" ]] && [[ "$G4" != "QA APPROVED" ]]; then
     TARGET="G4"
     AGENT="qa-specialist"
     REASON="E6 complete — ship review (G4)"
-  elif [[ "$G4" == "PENDING" ]] && epic_done "E6" && epic_done "E5"; then
-    ACTION="gate"
-    TARGET="G4"
-    AGENT="qa-specialist"
-    REASON="All epics done — final ship review"
   else
-    SF=$(sprint_file)
-    TODO_COUNT=0
-    if [[ -f "$SF" ]]; then
-      TODO_COUNT=$(grep -c '| TODO |' "$SF" 2>/dev/null || true)
-    fi
-    if [[ "$TODO_COUNT" -eq 0 ]] && [[ "$G4" != "QA APPROVED" ]]; then
+    TODO_COUNT=$(sprint_todo_count)
+    if [[ "$TODO_COUNT" -eq 0 ]]; then
       ACTION="sprint-plan"
-      TARGET="sprint-002"
+      TARGET="sprint-next"
       AGENT="product-manager"
       REASON="Sprint backlog empty — plan next sprint or close MVP gaps"
     else
@@ -206,6 +207,58 @@ if [[ -z "$ACTION" ]] && [[ "$G4" != "QA APPROVED" ]]; then
       REASON="No automatic next action — run ./scripts/harness-status.sh and inspect sprint"
       AGENT="product-manager"
     fi
+  fi
+fi
+
+# --- Post-G4: M4 (E5) then stretch M5 (E7) — keeps automation running ---
+if [[ -z "$ACTION" ]] && [[ "$G4" == "QA APPROVED" ]]; then
+  if epic_todo "E5" 2>/dev/null; then
+    ACTION="epic"
+    TARGET="E5"
+    AGENT="llm-engineer"
+    REASON="Post-MVP M4 — E5 vision QA refine loop"
+  elif epic_todo "E7" 2>/dev/null; then
+    ACTION="epic"
+    TARGET="E7"
+    AGENT="llm-engineer"
+    REASON="Post-MVP M5 stretch — E7 template memory"
+  elif ! epic_present "E5" 2>/dev/null; then
+    ACTION="sprint-plan"
+    TARGET="sprint-002"
+    AGENT="product-manager"
+    REASON="G4 shipped — plan post-MVP sprint with E5 (required) and E7 (stretch) TODO rows"
+  elif epic_done "E5" && epic_present "E7" && ! epic_done "E7"; then
+    ACTION="blocked"
+    TARGET="E7"
+    REASON="E7 present but not TODO/DONE — resolve IN_PROGRESS or BLOCKED rows"
+    AGENT="product-manager"
+  elif epic_done "E5" && (! epic_present "E7" 2>/dev/null || epic_done "E7"); then
+    ACTION="complete"
+    TARGET="post-MVP"
+    AGENT="product-manager"
+    REASON="G4 shipped; E5 done$([ epic_present E7 ] && echo '; E7 done' || echo '; E7 not queued') — post-MVP complete"
+  else
+    TODO_COUNT=$(sprint_todo_count)
+    if [[ "$TODO_COUNT" -gt 0 ]]; then
+      ACTION="blocked"
+      TARGET="sprint"
+      REASON="Post-MVP sprint has non-E5/E7 TODO rows — inspect CURRENT sprint"
+      AGENT="product-manager"
+    else
+      ACTION="blocked"
+      TARGET="E5"
+      REASON="E5 present but not done and no TODO — check IN_PROGRESS/BLOCKED rows"
+      AGENT="product-manager"
+    fi
+  fi
+fi
+
+# Fix REASON line for complete (avoid nested command issues in echo)
+if [[ "$ACTION" == "complete" ]] && [[ "$TARGET" == "post-MVP" ]]; then
+  if epic_present "E7" 2>/dev/null && epic_done "E7"; then
+    REASON="G4 shipped; E5 and E7 complete — post-MVP done"
+  else
+    REASON="G4 shipped; E5 done — post-MVP complete (E7 not queued)"
   fi
 fi
 
