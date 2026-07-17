@@ -24,6 +24,7 @@ from app.schemas import (
     PatchFieldsResponse,
     PatchValuesRequest,
     PatchValuesResponse,
+    RefineGroundingResponse,
     StampImagesRunResponse,
     StampPdfRunResponse,
     StampingJson,
@@ -40,6 +41,7 @@ from app.services.job_pipeline import (
     delete_job_tree,
     detect_upload_pdf_type,
     run_full_job_pipeline,
+    run_qa_refine_background,
     validate_upload_pdf_bytes,
 )
 from app.services.jobs import (
@@ -234,6 +236,32 @@ async def patch_job_values(
     except ValueError as exc:
         raise ApiHttpError(400, "invalid_values_patch", "Invalid values patch payload") from exc
     return PatchValuesResponse(**result)
+
+
+@router.post(
+    "/jobs/{job_id}/refine-grounding",
+    response_model=RefineGroundingResponse,
+    status_code=202,
+    summary="Run the E5 vision QA refinement loop (background)",
+)
+async def refine_grounding(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    settings: Settings = Depends(get_settings),
+) -> RefineGroundingResponse:
+    root, _, output_dir = _resolve_job(settings, job_id)
+    grounding_dir = output_dir / "field_grounding"
+    if not grounding_dir.is_dir():
+        raise ApiHttpError(400, "grounding_not_found", "Grounded fields not found; run grounding first.")
+
+    background_tasks.add_task(
+        run_qa_refine_background,
+        job_id=job_id,
+        job_root=root,
+        output_dir=output_dir,
+        settings=settings,
+    )
+    return RefineGroundingResponse(status="running")
 
 
 @router.post(
