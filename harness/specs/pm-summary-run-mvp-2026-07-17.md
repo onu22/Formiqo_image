@@ -2,7 +2,7 @@
 
 ## Cycle status
 
-The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-eb25`.
+The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-856a`.
 
 **Outcome:** MVP ship remains unblocked. `harness-next.sh` reports `ACTION=complete` because G4 is **QA APPROVED**.
 
