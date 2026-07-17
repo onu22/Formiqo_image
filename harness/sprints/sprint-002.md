@@ -26,13 +26,13 @@ goal: Post-MVP M4 — E5 vision QA refine loop; stretch M5 E7 template memory
 
 | ID | Epic | Milestone | Task | Owner | Deps | Status |
 |----|------|-----------|------|-------|------|--------|
-| T030 | E5 | M4a | Implement stamp → judge → bounded delta → re-stamp loop | LLM | G2, E4 | TODO |
-| T031 | E5 | M4a | Persist `qa_status` / confidence; wire `stages.qa_refine` in job.json | LLM | T030 | TODO |
-| T032 | E5 | M4a | `POST /api/v1/jobs/{id}/refine-grounding` + config (`grounding_qa_*`) | LLM | T030 | TODO |
-| T033 | E5 | M4a | Unit/integration tests + perturbed-bbox fixture convergence | LLM | T032 | TODO |
-| T034 | E5 | M4b | Optional auto-run refine as final pipeline stage (config toggle) | LLM | T032 | TODO |
-| T035 | E5 | M4b | Surface `qa_status: flagged` in editor ("check this field") | FE | T031 | TODO |
-| T036 | E5 | M4b | Document judge cost/latency (tokens per page per iteration) | LLM | T033 | TODO |
+| T030 | E5 | M4a | Implement stamp → judge → bounded delta → re-stamp loop | LLM | G2, E4 | IN_PROGRESS |
+| T031 | E5 | M4a | Persist `qa_status` / confidence; wire `stages.qa_refine` in job.json | LLM | T030 | IN_PROGRESS |
+| T032 | E5 | M4a | `POST /api/v1/jobs/{id}/refine-grounding` + config (`grounding_qa_*`) | LLM | T030 | IN_PROGRESS |
+| T033 | E5 | M4a | Unit/integration tests + perturbed-bbox fixture convergence | LLM | T032 | IN_PROGRESS |
+| T034 | E5 | M4b | Optional auto-run refine as final pipeline stage (config toggle) | LLM | T032 | IN_PROGRESS |
+| T035 | E5 | M4b | Surface `qa_status: flagged` in editor ("check this field") | FE | T031 | IN_PROGRESS |
+| T036 | E5 | M4b | Document judge cost/latency (tokens per page per iteration) | LLM | T033 | IN_PROGRESS |
 | T040 | E7 | M5 | Page fingerprint from normalized detected-line layout | LLM | E6 | TODO |
 | T041 | E7 | M5 | Template index under `data/` + reuse on fingerprint match | LLM | T040 | TODO |
 | T042 | E7 | M5 | Skip LLM for matched pages; `grounding_source: template` | LLM | T041 | TODO |
