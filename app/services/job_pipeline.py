@@ -95,6 +95,16 @@ def run_full_job_pipeline(
             provider=settings.grounding_provider,
             model=settings.grounding_model,
         )
+
+        # E5: optionally auto-refine as the final stage (config toggle, off by default).
+        # Never let a refinement failure sink an otherwise-ready job.
+        if settings.grounding_qa_enabled:
+            run_qa_refine_background(
+                job_id=job_id,
+                job_root=job_root,
+                output_dir=output_dir,
+                settings=settings,
+            )
     except SemanticGroundingJobError as exc:
         LOG.warning("job pipeline grounding failed job_id=%s: %s", job_id, exc)
         manifest = read_job_manifest(job_root)
@@ -116,6 +126,26 @@ def run_full_job_pipeline(
         except FileNotFoundError:
             pass
         raise
+
+
+def run_qa_refine_background(
+    *,
+    job_id: str,
+    job_root: Path,
+    output_dir: Path,
+    settings: Settings,
+) -> None:
+    """Background wrapper for the E5 refinement loop; records failures on ``stages.qa_refine``."""
+    from app.services.qa_refinement import QaRefinementError, run_qa_refinement_for_job
+
+    try:
+        run_qa_refinement_for_job(job_id=job_id, output_dir=output_dir, settings=settings)
+    except (QaRefinementError, Exception) as exc:  # noqa: BLE001 - isolate the manual re-run
+        LOG.warning("qa refinement failed job_id=%s: %s", job_id, exc)
+        try:
+            update_job_stage(job_root, "qa_refine", status="failed", error=str(exc))
+        except FileNotFoundError:
+            pass
 
 
 def delete_job_tree(job_root: Path) -> None:

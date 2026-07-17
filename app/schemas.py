@@ -256,6 +256,15 @@ class StampingJson(BaseModel):
     overrides: dict[str, FieldStyleOverride] = Field(default_factory=dict)
 
 
+class RefineGroundingResponse(BaseModel):
+    """Accepted response for ``POST /jobs/{id}/refine-grounding`` (E5).
+
+    The loop runs as a background task; poll ``GET /jobs/{id}`` for ``stages.qa_refine``.
+    """
+
+    status: str = "running"
+
+
 class StampPdfPageResult(BaseModel):
     page_index: int
     status: str

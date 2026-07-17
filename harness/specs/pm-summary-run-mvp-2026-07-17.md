@@ -1,78 +1,94 @@
-# PM Summary - Run MVP - 2026-07-17
+# PM Summary — Run MVP — 2026-07-17
 
-## Cycle status
+## Current cycle
 
-The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-f3af`.
+Branch: `cursor/harness-conductor-mvp-post-mvp-dd38`
 
-Latest cycle timestamp: 2026-07-17 12:18 UTC (cron automation).
-
-**Outcome:** MVP ship remains unblocked. `harness-next.sh` reports `ACTION=complete` because G4 is **QA APPROVED**.
-
-Current gates after this cycle:
+The conductor continued beyond G4 into the active post-MVP sprint, as required by
+`harness/RUN-MVP.md`. All gates remain open:
 
 - G1 architecture: APPROVED WITH CONDITIONS
 - G2 parity: QA APPROVED
 - G3 security: APPROVED WITH CONDITIONS
 - G4 ship: QA APPROVED
 
-Latest `./scripts/harness-next.sh` result:
+## E5 — Vision QA refinement loop
+
+Status: **DONE** (`sprint-002` tasks T030–T036)
+
+The LLM Engineer delivered the full stamp → judge → bounded-delta → re-stamp loop,
+manual refine endpoint, optional final pipeline stage, persisted QA outcomes and
+metrics, perturbed-bbox convergence coverage, cost/latency documentation, and the
+editor warning for flagged fields.
+
+Acceptance results:
+
+- [x] Median bbox error cannot increase; per-iteration movement is bounded.
+- [x] Convergence, iterations, confidence, token cost, and latency are persisted.
+- [x] Deliberately perturbed bboxes are measurably corrected.
+- [x] Judge cost/latency is documented in `harness/specs/qa-e5-refine-note.md`.
+- [x] Versioned judge prompts and offline deterministic tests are present.
+
+Verification:
+
+- `python3 -m pytest -q`: **73 passed**, one third-party deprecation warning.
+- `npm run typecheck && npm run lint && npm run build`: **passed**.
+- Live provider judging remains optional and requires an OpenAI or Anthropic API key;
+  the refinement algorithm and API behavior are covered with an injected judge.
+
+## E7 — Template memory
+
+Status: **DONE** (`sprint-002` tasks T040–T043)
+
+The LLM Engineer delivered scale-invariant fingerprints from normalized detected-line
+layouts, a durable atomic template index under `data/templates`, corrected-field
+capture after editor updates, and template reuse before LLM client construction.
+Matched pages retain the corrected layout with `grounding_source: template`.
+
+Acceptance results:
+
+- [x] A re-upload of a corrected form reaches the template path with zero LLM calls.
+- [x] Reused fields match the corrected layout.
+- [x] Near-miss layouts and sparse pages do not false-positive match.
+- [x] The template index is written atomically and can be disabled by configuration.
+
+Verification:
+
+- `python3 -m pytest -q`: **87 passed**, one third-party deprecation warning.
+- The E7 suite adds 14 fingerprint, persistence, zero-LLM, and near-miss tests.
+
+## Conductor state
+
+Startup:
+
+```text
+ACTION=epic
+TARGET=E5
+AGENT=llm-engineer
+REASON=Post-MVP M4 — E5 vision QA refine loop
+```
+
+After E5:
+
+```text
+ACTION=epic
+TARGET=E7
+AGENT=llm-engineer
+REASON=Post-MVP M5 stretch — E7 template memory
+```
+
+After E7:
 
 ```text
 ACTION=complete
-TARGET=MVP
+TARGET=post-MVP
 AGENT=product-manager
-PARALLEL=no
-REASON=G4 QA APPROVED - MVP shippable
+REASON=G4 shipped; E5 and E7 complete — post-MVP done
 ```
 
-Latest `./scripts/harness-next.sh --json` result:
+Final sprint counts: `DONE=11`, `TODO=0`, `BLOCKED=0`.
 
-```json
-{"action":"complete","target":"MVP","agent":"product-manager","reason":"G4 QA APPROVED — MVP shippable","parallel":"no","extra":"","gates":{"G1":"APPROVED","G2":"QA APPROVED","G3":"APPROVED","G4":"QA APPROVED"}}
-```
+## Outcome
 
-## Startup commands
-
-Executed successfully as required by the automation prompt:
-
-```bash
-./scripts/harness-status.sh
-./scripts/harness-next.sh
-```
-
-Startup status summary:
-
-- Active sprint: `sprint-001.md`
-- Sprint task counts: DONE=25, TODO=0, BLOCKED=0
-- G4 ship gate: QA APPROVED
-- Next action: COMPLETE / MVP shippable
-
-## Work completed this cycle
-
-- Read and followed `.cursor/skills/run-mvp/SKILL.md`.
-- Ran the required harness status and next-action commands.
-- Confirmed no new epic or gate delegation was needed because the harness is already at the `/run-mvp` stop condition.
-- Verified `harness/gates/G4-ship.md` records **QA APPROVED** and unblocks MVP ship.
-- Verified `harness/sprints/CURRENT` has all sprint backlog tasks marked `DONE`.
-
-## Verification
-
-PM verification commands:
-
-```bash
-./scripts/harness-status.sh
-./scripts/harness-next.sh
-git status --short --branch
-```
-
-Results:
-
-- `./scripts/harness-status.sh`: G1, G2, G3, and G4 are approved or approved with conditions; active sprint has no TODO or BLOCKED tasks.
-- `./scripts/harness-next.sh`: `ACTION=complete`, `TARGET=MVP`, `REASON=G4 QA APPROVED - MVP shippable`.
-- `git status --short --branch`: working branch is `cursor/formiqo-mvp-progress-f3af`.
-
-No backend or LLM code changed in this cycle, so pytest was not rerun.
-
-## Stop condition
-
-The conductor stops because G4 is **QA APPROVED**, satisfying the `/run-mvp` MVP ship condition in `harness/RUN-MVP.md`. No hard blockers remain.
+**Post-MVP complete.** G4 remains QA APPROVED, required E5 is complete, queued
+stretch E7 is complete, and the active post-MVP sprint has no remaining work.

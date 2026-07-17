@@ -111,6 +111,45 @@ class Settings(BaseSettings):
         le=50,
         description="Max spread (max-min) of delta components on an axis to treat as consensus.",
     )
+    grounding_qa_enabled: bool = Field(
+        default=False,
+        description=(
+            "When true, run the E5 vision QA refinement loop automatically as the final "
+            "stage of the upload pipeline. Off by default to control judge token cost."
+        ),
+    )
+    grounding_qa_provider: str = Field(
+        default="",
+        description=(
+            "Provider for the E5 QA judge (openai or anthropic). Empty picks a provider "
+            "different from the grounder when possible, to avoid correlated blind spots."
+        ),
+    )
+    grounding_qa_model: str = Field(
+        default="",
+        description="Model id for the E5 QA judge; empty falls back to a per-provider default.",
+    )
+    grounding_qa_crop_zoom: float = Field(
+        default=3.0,
+        ge=1.0,
+        le=8.0,
+        description="Upscale factor for per-field zoom crops sent to the QA judge.",
+    )
+    grounding_qa_crop_padding_px: int = Field(
+        default=40,
+        ge=0,
+        le=400,
+        description="Padding (page px) around a field bbox when cutting its QA zoom crop.",
+    )
+    grounding_qa_clean_confidence: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum judge confidence for a field to be marked confirmed/adjusted; below "
+            "this the field is flagged for manual review ('check this field')."
+        ),
+    )
     grounding_line_padding_px: int = Field(
         default=3,
         ge=0,
@@ -165,4 +204,34 @@ class Settings(BaseSettings):
         ge=25,
         le=500,
         description="Spacing in pixels between labeled coordinate-grid ticks when the overlay is enabled.",
+    )
+    template_memory_enabled: bool = Field(
+        default=True,
+        description=(
+            "E7 template memory. When true, a page whose normalized detected-line "
+            "fingerprint matches a previously human-corrected page reuses that corrected "
+            "grounding and skips the LLM (grounding_source=template)."
+        ),
+    )
+    templates_dir: Path = Field(
+        default=Path("./data/templates"),
+        description="Durable store for the E7 template index and per-fingerprint corrected fields.",
+    )
+    template_fingerprint_quantize: int = Field(
+        default=256,
+        ge=16,
+        le=4096,
+        description=(
+            "Grid resolution for normalizing detected-line coordinates into the page "
+            "fingerprint. Higher = stricter matching (fewer near-miss collisions)."
+        ),
+    )
+    template_min_lines: int = Field(
+        default=2,
+        ge=1,
+        le=100,
+        description=(
+            "Minimum detected lines on a page before it is eligible for a template "
+            "fingerprint. Guards against near-empty pages matching each other."
+        ),
     )

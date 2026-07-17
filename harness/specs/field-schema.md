@@ -43,6 +43,7 @@ Drop triplicated dimension keys from the wrapper when present in legacy files.
   "grounding_type": "text",
   "grounding_source": "cell | line_anchor | label_anchor | pixel | template | null",
   "qa_status": "confirmed | adjusted | flagged | null",
+  "qa_confidence": null,
   "reviewed": false,
   "font_size_pt": null
 }
@@ -61,6 +62,7 @@ Drop triplicated dimension keys from the wrapper when present in legacy files.
 | `grounding_type` | When it differs from `type` |
 | `grounding_source` | E4/E5/E7 provenance (null until E4) |
 | `qa_status` | E5 outcome (null until E5) |
+| `qa_confidence` | E5 judge confidence for the final verdict (null until E5) |
 | `reviewed` | UI review flag (default false) |
 | `font_size_pt` | Per-field override (E2/E6; null until set) |
 

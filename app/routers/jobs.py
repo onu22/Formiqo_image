@@ -24,6 +24,7 @@ from app.schemas import (
     PatchFieldsResponse,
     PatchValuesRequest,
     PatchValuesResponse,
+    RefineGroundingResponse,
     StampImagesRunResponse,
     StampPdfRunResponse,
     StampingJson,
@@ -40,6 +41,7 @@ from app.services.job_pipeline import (
     delete_job_tree,
     detect_upload_pdf_type,
     run_full_job_pipeline,
+    run_qa_refine_background,
     validate_upload_pdf_bytes,
 )
 from app.services.jobs import (
@@ -205,7 +207,7 @@ async def patch_job_fields(
     body: PatchFieldsRequest,
     settings: Settings = Depends(get_settings),
 ) -> PatchFieldsResponse:
-    _, _, output_dir = _resolve_job(settings, job_id)
+    root, _, output_dir = _resolve_job(settings, job_id)
     try:
         updated = patch_fields(
             output_dir=output_dir,
@@ -215,7 +217,50 @@ async def patch_job_fields(
         raise ApiHttpError(404, "field_not_found", "Field not found on the requested page") from exc
     except ValueError as exc:
         raise ApiHttpError(400, "invalid_field_patch", "Invalid field patch payload") from exc
+
+    # E7 template memory: a successful field PATCH is a human correction. Snapshot the
+    # affected pages as reusable templates keyed by their detected-line fingerprint.
+    _record_corrected_templates(
+        settings=settings,
+        job_root=root,
+        output_dir=output_dir,
+        job_id=job_id,
+        updated=updated,
+    )
     return PatchFieldsResponse(fields=updated)
+
+
+def _record_corrected_templates(
+    *,
+    settings: Settings,
+    job_root: Path,
+    output_dir: Path,
+    job_id: str,
+    updated: list[dict],
+) -> None:
+    """Best-effort: persist corrected pages to template memory; never break the PATCH."""
+    if not settings.template_memory_enabled:
+        return
+    page_numbers = sorted({int(u["page_number"]) for u in updated if u.get("page_number")})
+    if not page_numbers:
+        return
+    try:
+        from app.services.template_memory import record_corrected_pages
+
+        source_filename = job_id
+        try:
+            source_filename = read_job_manifest(job_root).get("source_filename") or job_id
+        except (FileNotFoundError, ValueError):
+            pass
+        record_corrected_pages(
+            settings=settings,
+            output_dir=output_dir,
+            source_job_id=job_id,
+            source_filename=source_filename,
+            page_numbers=page_numbers,
+        )
+    except Exception:  # noqa: BLE001 - template memory is an optimization, never a hard dependency
+        LOG.warning("template memory recording failed for job_id=%s", job_id, exc_info=True)
 
 
 @router.patch("/jobs/{job_id}/values", response_model=PatchValuesResponse, summary="Update field values")
@@ -234,6 +279,32 @@ async def patch_job_values(
     except ValueError as exc:
         raise ApiHttpError(400, "invalid_values_patch", "Invalid values patch payload") from exc
     return PatchValuesResponse(**result)
+
+
+@router.post(
+    "/jobs/{job_id}/refine-grounding",
+    response_model=RefineGroundingResponse,
+    status_code=202,
+    summary="Run the E5 vision QA refinement loop (background)",
+)
+async def refine_grounding(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    settings: Settings = Depends(get_settings),
+) -> RefineGroundingResponse:
+    root, _, output_dir = _resolve_job(settings, job_id)
+    grounding_dir = output_dir / "field_grounding"
+    if not grounding_dir.is_dir():
+        raise ApiHttpError(400, "grounding_not_found", "Grounded fields not found; run grounding first.")
+
+    background_tasks.add_task(
+        run_qa_refine_background,
+        job_id=job_id,
+        job_root=root,
+        output_dir=output_dir,
+        settings=settings,
+    )
+    return RefineGroundingResponse(status="running")
 
 
 @router.post(

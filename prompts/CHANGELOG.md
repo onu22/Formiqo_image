@@ -1,7 +1,21 @@
 # Grounding prompt changelog
 
 Prompt assets under `prompts/` are versioned here. Bump this file whenever the model-facing
-contract changes; `tests/test_grounding_prompt.py` guards the invariants.
+contract changes; `tests/test_grounding_prompt.py` and `tests/test_e5_refine.py` guard the
+invariants.
+
+## v3 — 2026-07-17 (E5 vision QA refinement judge)
+
+- Added the **QA judge** prompt pair (`qa_judge_system.md`, `qa_judge_user.md`) for the
+  closed refinement loop (`POST /jobs/{id}/refine-grounding`).
+- The judge inspects a per-field **zoom crop** and returns a narrow structured verdict
+  (`verdict: ok | adjust`, page-pixel `dx`/`dy`, `confidence`, `reason`); positional only.
+- Corrections are applied as **bounded per-iteration deltas** (`grounding_qa_max_bbox_delta_px`)
+  with optional consensus-translation merging; enforced in
+  `app/services/qa_refinement.py`, schema in `app/services/qa_schema.py`.
+- The judge should run on a **different provider/model than the grounder** when configured
+  (`FORMIQO_GROUNDING_QA_PROVIDER` / `FORMIQO_GROUNDING_QA_MODEL`) to avoid correlated
+  blind spots.
 
 ## v2 — 2026-07-13 (E4 anchor-first grounding)
 

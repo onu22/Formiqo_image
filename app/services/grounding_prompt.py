@@ -57,6 +57,16 @@ def load_grounding_user_prompt() -> str:
     return _load_prompt_file("grounding_user.md")
 
 
+def load_qa_judge_system_prompt() -> str:
+    """E5 QA judge system prompt (respects ``configure_prompt_dir`` / env override)."""
+    return _load_prompt_file("qa_judge_system.md")
+
+
+def load_qa_judge_user_prompt() -> str:
+    """E5 QA judge user instruction prompt."""
+    return _load_prompt_file("qa_judge_user.md")
+
+
 def _compact_json(data: Any) -> str:
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 

@@ -226,6 +226,37 @@ def update_job_after_grounding(
     return manifest
 
 
+def update_job_after_qa_refine(
+    job_root_dir: Path,
+    *,
+    iterations: int,
+    converged: bool,
+    confirmed: int,
+    adjusted: int,
+    flagged: int,
+    cost: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Record the E5 QA refinement outcome on ``stages.qa_refine``."""
+    manifest = read_job_manifest(job_root_dir)
+    stages = manifest.setdefault("stages", {})
+    node = stages.setdefault("qa_refine", {})
+    node.update(
+        {
+            "status": "done",
+            "error": None,
+            "iterations": iterations,
+            "converged": converged,
+            "confirmed": confirmed,
+            "adjusted": adjusted,
+            "flagged": flagged,
+        }
+    )
+    if cost is not None:
+        node["cost"] = cost
+    write_job_manifest(job_root_dir, manifest)
+    return manifest
+
+
 def update_job_after_image_stamp(
     job_root_dir: Path,
     *,
@@ -325,6 +356,17 @@ def job_detail_projection(manifest: dict[str, Any]) -> dict[str, Any]:
         }
         if grounding.get("status"):
             stages_out["grounding"]["status"] = grounding["status"]
+
+    qa_refine = stages.get("qa_refine")
+    if isinstance(qa_refine, dict):
+        qa_out: dict[str, Any] = {
+            "status": qa_refine.get("status", "skipped"),
+            "iterations": int(qa_refine.get("iterations") or 0),
+        }
+        for key in ("converged", "confirmed", "adjusted", "flagged", "cost"):
+            if key in qa_refine and qa_refine[key] is not None:
+                qa_out[key] = qa_refine[key]
+        stages_out["qa_refine"] = qa_out
 
     errors: list[Any] = []
     for stage_name, node in stages.items():

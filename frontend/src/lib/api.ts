@@ -120,6 +120,11 @@ export const api = {
     return request(`/jobs/${jobId}/stamp-pdf`, { method: "POST" });
   },
 
+  refineGrounding(jobId: string): Promise<{ status: string }> {
+    // E5 vision QA refinement re-run; poll getJob for stages.qa_refine afterwards.
+    return request(`/jobs/${jobId}/refine-grounding`, { method: "POST" });
+  },
+
   retryGrounding(jobId: string): Promise<unknown> {
     // Legacy job-scoped re-run; closest available mechanism until a dedicated
     // retry-failed-pages endpoint ships. Uses default provider/model on the job.
