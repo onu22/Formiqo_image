@@ -1,9 +1,9 @@
 ---
 sprint_number: sprint-002
-status: active
+status: closed
 start_date: 2026-07-17
 end_date: 2026-07-31
-closed_date:
+closed_date: 2026-07-17
 project: formiqo-mvp
 goal: Post-MVP M4 — E5 vision QA refine loop; stretch M5 E7 template memory
 ---
@@ -57,8 +57,22 @@ G4 shipped → T030–T033 (E5) → T034–T036 → T040–T043 (E7 stretch)
 - [x] All E5 tasks DONE (M4) — T030–T036
 - [x] E7 stretch DONE (M5) — T040–T043 (template memory by detected-line fingerprint)
 - [x] pytest green (87 passed); E7 reuse exercised offline (zero-LLM path asserts no provider client is built)
-- [x] PM summary written for the E5 cycle
+- [x] PM summary written for the E5 and E7 cycles
 
 ## Retrospective
 
-_To be filled when sprint closes._
+### What went well
+
+- The conductor continued past G4 and completed both post-MVP epics without a gate bypass.
+- E5's provider dependency is injectable, so refinement behavior is fully testable offline.
+- E7 checks template memory before constructing an LLM client, making zero-call reuse enforceable.
+
+### What didn't
+
+- Live E5 judge quality could not be benchmarked without provider API keys; the automated
+  acceptance suite uses a deterministic injected judge instead.
+
+### Outcome
+
+M4 and stretch M5 are complete: all 11 tasks are DONE, with 87 Python tests and the
+frontend typecheck, lint, and production build passing.

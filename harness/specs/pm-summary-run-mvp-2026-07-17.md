@@ -36,6 +36,27 @@ Verification:
 - Live provider judging remains optional and requires an OpenAI or Anthropic API key;
   the refinement algorithm and API behavior are covered with an injected judge.
 
+## E7 — Template memory
+
+Status: **DONE** (`sprint-002` tasks T040–T043)
+
+The LLM Engineer delivered scale-invariant fingerprints from normalized detected-line
+layouts, a durable atomic template index under `data/templates`, corrected-field
+capture after editor updates, and template reuse before LLM client construction.
+Matched pages retain the corrected layout with `grounding_source: template`.
+
+Acceptance results:
+
+- [x] A re-upload of a corrected form reaches the template path with zero LLM calls.
+- [x] Reused fields match the corrected layout.
+- [x] Near-miss layouts and sparse pages do not false-positive match.
+- [x] The template index is written atomically and can be disabled by configuration.
+
+Verification:
+
+- `python3 -m pytest -q`: **87 passed**, one third-party deprecation warning.
+- The E7 suite adds 14 fingerprint, persistence, zero-LLM, and near-miss tests.
+
 ## Conductor state
 
 Startup:
@@ -56,7 +77,18 @@ AGENT=llm-engineer
 REASON=Post-MVP M5 stretch — E7 template memory
 ```
 
-Sprint counts after E5: `DONE=7`, `TODO=4`, `BLOCKED=0`.
+After E7:
 
-The conductor is not at a stop condition. E7 is queued and must run before
-`ACTION=complete`.
+```text
+ACTION=complete
+TARGET=post-MVP
+AGENT=product-manager
+REASON=G4 shipped; E5 and E7 complete — post-MVP done
+```
+
+Final sprint counts: `DONE=11`, `TODO=0`, `BLOCKED=0`.
+
+## Outcome
+
+**Post-MVP complete.** G4 remains QA APPROVED, required E5 is complete, queued
+stretch E7 is complete, and the active post-MVP sprint has no remaining work.
