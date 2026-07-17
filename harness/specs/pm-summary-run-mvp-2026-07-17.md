@@ -1,78 +1,52 @@
-# PM Summary - Run MVP - 2026-07-17
+# PM Summary — Run MVP — 2026-07-17
 
-## Cycle status
+**Branch:** `cursor/harness-conductor-mvp-post-mvp-e3d1`  
+**Mode:** autonomous MVP + post-MVP conductor
 
-The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-f3af`.
-
-Latest cycle timestamp: 2026-07-17 12:18 UTC (cron automation).
-
-**Outcome:** MVP ship remains unblocked. `harness-next.sh` reports `ACTION=complete` because G4 is **QA APPROVED**.
-
-Current gates after this cycle:
+## Current gates
 
 - G1 architecture: APPROVED WITH CONDITIONS
 - G2 parity: QA APPROVED
 - G3 security: APPROVED WITH CONDITIONS
-- G4 ship: QA APPROVED
+- G4 ship: QA APPROVED — MVP shipped; post-MVP work continues
 
-Latest `./scripts/harness-next.sh` result:
+## Cycle 1 — E5 vision QA refinement
+
+Startup status selected:
 
 ```text
-ACTION=complete
-TARGET=MVP
-AGENT=product-manager
-PARALLEL=no
-REASON=G4 QA APPROVED - MVP shippable
+ACTION=epic
+TARGET=E5
+AGENT=llm-engineer
+REASON=Post-MVP M4 — E5 vision QA refine loop
 ```
 
-Latest `./scripts/harness-next.sh --json` result:
+The LLM Engineer completed sprint tasks T030–T036:
 
-```json
-{"action":"complete","target":"MVP","agent":"product-manager","reason":"G4 QA APPROVED — MVP shippable","parallel":"no","extra":"","gates":{"G1":"APPROVED","G2":"QA APPROVED","G3":"APPROVED","G4":"QA APPROVED"}}
+- Closed stamp → vision judge → bounded correction → re-stamp loop.
+- Per-field `qa_status` and final confidence persistence.
+- Manual `POST /api/v1/jobs/{id}/refine-grounding` endpoint and optional auto-run stage.
+- Convergence/iteration/cost metrics in `stages.qa_refine` and job detail responses.
+- Editor warning for flagged fields.
+- Perturbed-bbox convergence and bound tests.
+- Judge token/latency guidance in `harness/specs/e5-refine-grounding-note-2026-07-17.md`.
+
+Verification:
+
+- Full backend suite: `71 passed, 1 warning`.
+- Frontend typecheck: passed.
+- Live provider regression remains optional and requires API keys; deterministic acceptance
+  tests pass and the feature is disabled by default.
+
+Commits: `4cd0fbf`, `5334b25`, `b8d6bbf`, `e471014`.
+
+After E5, `harness-next.sh` selected:
+
+```text
+ACTION=epic
+TARGET=E7
+AGENT=llm-engineer
+REASON=Post-MVP M5 stretch — E7 template memory
 ```
 
-## Startup commands
-
-Executed successfully as required by the automation prompt:
-
-```bash
-./scripts/harness-status.sh
-./scripts/harness-next.sh
-```
-
-Startup status summary:
-
-- Active sprint: `sprint-001.md`
-- Sprint task counts: DONE=25, TODO=0, BLOCKED=0
-- G4 ship gate: QA APPROVED
-- Next action: COMPLETE / MVP shippable
-
-## Work completed this cycle
-
-- Read and followed `.cursor/skills/run-mvp/SKILL.md`.
-- Ran the required harness status and next-action commands.
-- Confirmed no new epic or gate delegation was needed because the harness is already at the `/run-mvp` stop condition.
-- Verified `harness/gates/G4-ship.md` records **QA APPROVED** and unblocks MVP ship.
-- Verified `harness/sprints/CURRENT` has all sprint backlog tasks marked `DONE`.
-
-## Verification
-
-PM verification commands:
-
-```bash
-./scripts/harness-status.sh
-./scripts/harness-next.sh
-git status --short --branch
-```
-
-Results:
-
-- `./scripts/harness-status.sh`: G1, G2, G3, and G4 are approved or approved with conditions; active sprint has no TODO or BLOCKED tasks.
-- `./scripts/harness-next.sh`: `ACTION=complete`, `TARGET=MVP`, `REASON=G4 QA APPROVED - MVP shippable`.
-- `git status --short --branch`: working branch is `cursor/formiqo-mvp-progress-f3af`.
-
-No backend or LLM code changed in this cycle, so pytest was not rerun.
-
-## Stop condition
-
-The conductor stops because G4 is **QA APPROVED**, satisfying the `/run-mvp` MVP ship condition in `harness/RUN-MVP.md`. No hard blockers remain.
+No hard blocker is present. The conductor continues to E7.
