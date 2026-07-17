@@ -57,7 +57,7 @@ G4 shipped → T030–T033 (E5) → T034–T036 → T040–T043 (E7 stretch)
 - [x] All E5 tasks DONE (M4) — T030–T036
 - [ ] E7 stretch DONE or explicitly deferred (remove TODO rows)
 - [x] pytest green (73 passed); refine path exercised offline via injected judge_fn (live needs API keys)
-- [ ] PM summary written for the cycle
+- [x] PM summary written for the E5 cycle
 
 ## Retrospective
 
