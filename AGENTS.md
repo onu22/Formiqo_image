@@ -153,5 +153,5 @@ Models are set in each agent's YAML frontmatter (`model:` field). Cursor may fal
 | `/epic E1` | Start work on a specific epic with role context |
 | `/gate G1` | Run a quality gate review (SA, QA, or SEC by gate) |
 | `/sprint-plan` | Plan or update the active sprint |
-| `/run` | Start FastAPI dev server |
-| `/stop` | Stop dev server |
+| `/run` | Start FastAPI + Vite (backend + frontend) |
+| `/stop` | Stop both dev servers |

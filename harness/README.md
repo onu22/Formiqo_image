@@ -16,7 +16,7 @@ markdown agents, stop-the-line gates, PM-routed epics, sprint tracking — no ru
    - **`/epic E1`** — Start a specific epic with the correct role context
    - **`/gate G1`** — Run architecture sign-off (Solution Architect)
    - **`/sprint-plan`** — Create or refresh sprint plan
-   - **`/run`** / **`/stop`** — Dev server
+   - **`/run`** / **`/stop`** — Backend + frontend dev servers
 
 ### Sit-and-wait mode
 

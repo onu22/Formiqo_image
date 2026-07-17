@@ -1,12 +1,12 @@
 ---
 name: stop
-description: Stop the Formiqo FastAPI dev server running on port 8000.
+description: Stop the Formiqo FastAPI backend and Vite frontend started by /run.
 disable-model-invocation: true
 ---
 
-# Stop Formiqo Dev Server
+# Stop Formiqo Dev Servers
 
-Stop the local uvicorn development server.
+Stop the local uvicorn backend and Vite frontend.
 
 ## Steps
 
@@ -19,7 +19,7 @@ Stop the local uvicorn development server.
 2. If the script fails, report the exact error.
 
 3. Confirm success with:
-   - Script output indicating the server was stopped, or that nothing was running on port 8000
-   - Port 8000 is no longer in use
+   - Script output indicating servers were stopped, or that nothing was running
+   - Ports 8000 and 5173 are no longer in use
 
-4. Do **not** delete `.venv` or uninstall dependencies — only stop the running server.
+4. Do **not** delete `.venv`, `node_modules`, or uninstall dependencies — only stop the running servers.

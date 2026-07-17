@@ -21,9 +21,9 @@ Multi-agent operating system for delivering [`docs/PRD.md`](docs/PRD.md), inspir
 Type `/run` in Cursor chat to:
 
 - create `.venv` if missing
-- install dependencies when needed
-- start `uvicorn` on port 8000
-- open Swagger docs in Firefox at `http://127.0.0.1:8000/docs#/`
+- install Python and frontend dependencies when needed
+- start `uvicorn` on port 8000 and Vite on port 5173
+- open the UI and Swagger in Firefox
 
 Or run directly:
 
@@ -31,7 +31,10 @@ Or run directly:
 ./scripts/run-dev.sh
 ```
 
-Stop the server with `/stop` in Cursor chat, or:
+- UI: http://127.0.0.1:5173/
+- API docs: http://127.0.0.1:8000/docs#/
+
+Stop both with `/stop` in Cursor chat, or:
 
 ```bash
 ./scripts/run-dev.sh stop
