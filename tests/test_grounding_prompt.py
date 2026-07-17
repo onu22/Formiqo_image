@@ -12,6 +12,8 @@ from app.services.grounding_prompt import (
     build_user_text_bundle,
     line_detection_payload_for_prompt,
     load_grounding_developer_prompt,
+    load_grounding_qa_system_prompt,
+    load_grounding_qa_user_prompt,
     slim_line_detection_for_prompt,
 )
 
@@ -26,6 +28,24 @@ def test_prompt_files_exist_and_no_hardcoded_stems() -> None:
             assert stem not in text, f"{name} must not contain {stem!r}"
     assert "page_NNN.json" in load_grounding_developer_prompt()
     assert "detected lines.json" in load_grounding_developer_prompt()
+
+
+def test_qa_prompt_files_exist_and_are_field_scoped() -> None:
+    for name in ("grounding_qa_system.md", "grounding_qa_user.md"):
+        text = (_REPO / "prompts" / name).read_text(encoding="utf-8")
+        assert text.strip(), f"{name} must not be empty"
+        for stem in _FORBIDDEN_STEMS:
+            assert stem not in text, f"{name} must not contain {stem!r}"
+
+
+def test_qa_prompts_document_verdict_contract() -> None:
+    system = load_grounding_qa_system_prompt()
+    user = load_grounding_qa_user_prompt()
+    # The judge contract: a narrow ok/shift verdict with a pixel translation.
+    assert "ok" in system and "shift" in system
+    assert "dx" in system and "dy" in system
+    assert "field_crop_image" in user
+    assert "field_metadata_json" in user
 
 
 def test_user_bundle_uses_role_labels() -> None:
