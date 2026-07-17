@@ -236,7 +236,7 @@ if [[ -z "$ACTION" ]] && [[ "$G4" == "QA APPROVED" ]]; then
     ACTION="complete"
     TARGET="post-MVP"
     AGENT="product-manager"
-    REASON="G4 shipped; E5 done$([ epic_present E7 ] && echo '; E7 done' || echo '; E7 not queued') — post-MVP complete"
+    REASON="G4 shipped; E5 done$(epic_present "E7" && echo '; E7 done' || echo '; E7 not queued') — post-MVP complete"
   else
     TODO_COUNT=$(sprint_todo_count)
     if [[ "$TODO_COUNT" -gt 0 ]]; then
