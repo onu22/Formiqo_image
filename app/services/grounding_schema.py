@@ -163,3 +163,77 @@ def anthropic_grounding_tool() -> dict[str, Any]:
 
 def anthropic_tool_choice() -> dict[str, Any]:
     return {"type": "tool", "name": GROUNDING_TOOL_NAME}
+
+
+# --------------------------------------------------------------------------- #
+# E5 vision QA judge contract
+# --------------------------------------------------------------------------- #
+
+# Verdict the judge returns per field crop.
+_QA_VERDICTS: tuple[str, ...] = ("ok", "shift", "unsure")
+
+QA_JUDGE_TOOL_NAME = "emit_field_verdicts"
+QA_JUDGE_SCHEMA_NAME = "field_verdicts"
+
+
+def _qa_verdict_schema(*, strict: bool) -> dict[str, Any]:
+    properties: dict[str, Any] = {
+        "field_id": {"type": "string"},
+        "verdict": {"type": "string", "enum": list(_QA_VERDICTS)},
+        # Suggested pixel shift in full-page top-left coordinate space
+        # (positive dx = move right, positive dy = move down). Clamped to the
+        # configured per-iteration bound regardless of the returned magnitude.
+        "dx": {"type": "integer"},
+        "dy": {"type": "integer"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    }
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    if strict:
+        schema["required"] = list(properties.keys())
+        schema["additionalProperties"] = False
+    else:
+        schema["required"] = ["field_id", "verdict"]
+    return schema
+
+
+def qa_judge_response_schema(*, strict: bool) -> dict[str, Any]:
+    """JSON schema for a single QA judge call covering one page's field crops."""
+    properties: dict[str, Any] = {
+        "fields": {"type": "array", "items": _qa_verdict_schema(strict=strict)},
+    }
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    if strict:
+        schema["required"] = list(properties.keys())
+        schema["additionalProperties"] = False
+    else:
+        schema["required"] = ["fields"]
+    return schema
+
+
+def openai_qa_response_format() -> dict[str, Any]:
+    """``response_format`` for the OpenAI judge (strict json_schema mode)."""
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": QA_JUDGE_SCHEMA_NAME,
+            "strict": True,
+            "schema": qa_judge_response_schema(strict=True),
+        },
+    }
+
+
+def anthropic_qa_tool() -> dict[str, Any]:
+    """Anthropic tool definition for the QA judge (forced tool-use)."""
+    return {
+        "name": QA_JUDGE_TOOL_NAME,
+        "description": (
+            "Return a positioning verdict for each labeled field crop. Use verdict 'ok' when the "
+            "value sits correctly on its line / in its cell, 'shift' with a pixel dx/dy correction "
+            "when it is off, or 'unsure' when the crop is ambiguous."
+        ),
+        "input_schema": qa_judge_response_schema(strict=False),
+    }
+
+
+def anthropic_qa_tool_choice() -> dict[str, Any]:
+    return {"type": "tool", "name": QA_JUDGE_TOOL_NAME}

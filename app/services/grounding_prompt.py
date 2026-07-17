@@ -57,6 +57,11 @@ def load_grounding_user_prompt() -> str:
     return _load_prompt_file("grounding_user.md")
 
 
+def load_qa_judge_prompt() -> str:
+    """System/developer prompt for the E5 vision QA placement judge."""
+    return _load_prompt_file("grounding_qa_judge.md")
+
+
 def _compact_json(data: Any) -> str:
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 

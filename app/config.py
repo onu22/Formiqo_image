@@ -111,6 +111,57 @@ class Settings(BaseSettings):
         le=50,
         description="Max spread (max-min) of delta components on an axis to treat as consensus.",
     )
+    grounding_qa_enabled: bool = Field(
+        default=False,
+        description=(
+            "When true, run the E5 vision QA refinement loop automatically as the final stage "
+            "of the upload pipeline. Off by default to keep the ready-path fast and cheap."
+        ),
+    )
+    grounding_qa_judge_provider: str = Field(
+        default="",
+        description=(
+            "Provider for the E5 QA judge (openai or anthropic). Empty picks the provider that "
+            "differs from the grounder to avoid correlated blind spots."
+        ),
+    )
+    grounding_qa_judge_model: str = Field(
+        default="",
+        description="Model id for the QA judge. Empty falls back to a per-provider default.",
+    )
+    grounding_qa_judge_max_tokens: int = Field(
+        default=4000,
+        ge=256,
+        le=16000,
+        description="Max output tokens for a QA judge call (one call per page per iteration).",
+    )
+    grounding_qa_crop_zoom: float = Field(
+        default=3.0,
+        ge=1.0,
+        le=8.0,
+        description="Zoom factor for per-field crops sent to the judge (~3x around the stamped bbox).",
+    )
+    grounding_qa_crop_context_px: int = Field(
+        default=24,
+        ge=0,
+        le=200,
+        description="Extra pixel context added around a field bbox before cropping for the judge.",
+    )
+    grounding_qa_max_fields_per_call: int = Field(
+        default=12,
+        ge=1,
+        le=60,
+        description="Max per-field crops bundled into a single judge call (bounds judge token cost).",
+    )
+    grounding_qa_flag_low_confidence: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Judge confidence at or below which a field is marked qa_status=flagged for reviewer "
+            "attention even when the loop stops adjusting it."
+        ),
+    )
     grounding_line_padding_px: int = Field(
         default=3,
         ge=0,

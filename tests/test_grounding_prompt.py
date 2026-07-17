@@ -12,6 +12,7 @@ from app.services.grounding_prompt import (
     build_user_text_bundle,
     line_detection_payload_for_prompt,
     load_grounding_developer_prompt,
+    load_qa_judge_prompt,
     slim_line_detection_for_prompt,
 )
 
@@ -86,6 +87,18 @@ def test_developer_prompt_documents_anchor_contract() -> None:
     assert "anchor" in dev.lower()
     for kind in ("cell", "line_anchor", "label_anchor"):
         assert kind in dev
+
+
+def test_qa_judge_prompt_exists_and_documents_verdicts() -> None:
+    judge = load_qa_judge_prompt()
+    lower = judge.lower()
+    for verdict in ("ok", "shift", "unsure"):
+        assert verdict in lower
+    # Judge works in full-page top-left pixel space (PRD §2.2), not normalized coords.
+    assert "top-left" in lower
+    assert "dx" in judge and "dy" in judge
+    for stem in _FORBIDDEN_STEMS:
+        assert stem not in judge
 
 
 def test_adapt_grounding_response_preserves_anchor() -> None:

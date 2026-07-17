@@ -3,6 +3,17 @@
 Prompt assets under `prompts/` are versioned here. Bump this file whenever the model-facing
 contract changes; `tests/test_grounding_prompt.py` guards the invariants.
 
+## v3 — 2026-07-17 (E5 vision QA judge)
+
+- Added `grounding_qa_judge.md`: the system/developer prompt for the E5 vision QA placement
+  judge. The judge reviews per-field zoomed crops of the stamped preview and returns a
+  per-field verdict (`ok | shift | unsure`) with a bounded pixel `dx/dy` correction in
+  full-page top-left coordinate space.
+- Judge output shape is enforced by structured provider outputs (OpenAI strict `json_schema`
+  `field_verdicts`, Anthropic tool-use `emit_field_verdicts`); see `grounding_schema.py`.
+- The judge defaults to the provider that differs from the grounder (correlated-blind-spot
+  avoidance); model/provider come from `grounding_qa_*` config, never hardcoded keys.
+
 ## v2 — 2026-07-13 (E4 anchor-first grounding)
 
 - Introduced the **anchor-first contract**: each field may carry an `anchor` object
