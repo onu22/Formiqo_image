@@ -28,6 +28,38 @@ class Settings(BaseSettings):
         default=Path("./data/user-uploads"),
         description="Drop folder for PDFs processed by the pipeline router (CLI / process-once API).",
     )
+    templates_dir: Path = Field(
+        default=Path("./data/templates"),
+        description=(
+            "Directory for the E7 template-memory index and per-fingerprint corrected-field "
+            "payloads. Small on-disk store; no database."
+        ),
+    )
+    template_memory_enabled: bool = Field(
+        default=True,
+        description=(
+            "When true, capture human-corrected editor saves as reusable templates and reuse "
+            "them on re-upload when a page's detected-line fingerprint matches (E7)."
+        ),
+    )
+    template_fingerprint_bins: int = Field(
+        default=200,
+        ge=20,
+        le=2000,
+        description=(
+            "Quantization resolution for the normalized detected-line fingerprint. Higher = "
+            "stricter matching (less tolerance to sub-bin layout drift)."
+        ),
+    )
+    template_min_lines: int = Field(
+        default=4,
+        ge=1,
+        le=100,
+        description=(
+            "Minimum detected lines on a page before it is eligible for template capture/reuse. "
+            "Guards against trivial/near-empty pages false-positive matching."
+        ),
+    )
     max_upload_bytes: int = Field(
         default=50 * 1024 * 1024,
         ge=1024,
