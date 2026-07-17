@@ -692,26 +692,35 @@ def run_semantic_grounding_for_job(
     settings: Settings,
     provider: str = "openai",
     model: str | None = None,
+    template_page_results: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     prov, resolved_model = resolve_grounding_model(provider=provider, model=model, settings=settings)
     configure_prompt_dir(settings.grounding_prompt_dir)
-
-    openai_client: OpenAI | None = None
-    anthropic_client: Anthropic | None = None
-    if prov == "openai":
-        if not settings.openai_api_key.strip():
-            raise ValueError("FORMIQO_OPENAI_API_KEY is missing for provider=openai.")
-        openai_client = OpenAI(api_key=settings.openai_api_key)
-    else:
-        if not settings.anthropic_api_key.strip():
-            raise ValueError("FORMIQO_ANTHROPIC_API_KEY is missing for provider=anthropic.")
-        anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     page_entries = list_converted_page_pngs(output_dir)
     if not page_entries:
         raise ValueError("No converted page PNGs found; run conversion and line detection first.")
 
     targets = sorted(idx for idx, _ in page_entries)
+
+    # E7 template memory: pages whose fingerprint matched a human-corrected page are reused
+    # verbatim (grounding_source: template) and never sent to the LLM.
+    templated = {idx: grounding for idx, grounding in (template_page_results or {}).items() if idx in targets}
+    to_ground = [idx for idx in targets if idx not in templated]
+
+    # Only construct a provider client when at least one page still needs the LLM. A fully
+    # templated re-upload therefore requires no API key and makes zero model calls.
+    openai_client: OpenAI | None = None
+    anthropic_client: Anthropic | None = None
+    if to_ground:
+        if prov == "openai":
+            if not settings.openai_api_key.strip():
+                raise ValueError("FORMIQO_OPENAI_API_KEY is missing for provider=openai.")
+            openai_client = OpenAI(api_key=settings.openai_api_key)
+        else:
+            if not settings.anthropic_api_key.strip():
+                raise ValueError("FORMIQO_ANTHROPIC_API_KEY is missing for provider=anthropic.")
+            anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     job_root_dir = output_dir.parent
     progress_lock = threading.Lock()
@@ -754,29 +763,36 @@ def run_semantic_grounding_for_job(
     succeeded: list[dict[str, Any]] = []
     failed_pages: list[dict[str, Any]] = []
 
+    # Reused template pages count as already-grounded (zero LLM calls).
+    results_by_page: dict[int, dict[str, Any]] = {
+        idx: {"page_index": idx, "grounding": grounding} for idx, grounding in templated.items()
+    }
+    completed = len(results_by_page)
+    if completed:
+        _record_progress(completed)
+
     # Bounded parallelism: a multi-page form grounds in roughly the time of its slowest
     # pages, not the sum. Each page is isolated so one failure never sinks the others.
-    max_workers = max(1, min(settings.grounding_max_concurrency, len(targets)))
-    results_by_page: dict[int, dict[str, Any]] = {}
-    completed = 0
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_page = {executor.submit(_ground, idx): idx for idx in targets}
-        for future in as_completed(future_to_page):
-            page_index = future_to_page[future]
-            try:
-                results_by_page[page_index] = future.result()
-                completed += 1
-                _record_progress(completed)
-            except Exception as exc:
-                LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
-                failed_pages.append(
-                    {
-                        "page_index": page_index,
-                        "status": "failed",
-                        "error": type(exc).__name__,
-                        "detail": str(exc),
-                    }
-                )
+    if to_ground:
+        max_workers = max(1, min(settings.grounding_max_concurrency, len(to_ground)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_page = {executor.submit(_ground, idx): idx for idx in to_ground}
+            for future in as_completed(future_to_page):
+                page_index = future_to_page[future]
+                try:
+                    results_by_page[page_index] = future.result()
+                    completed += 1
+                    _record_progress(completed)
+                except Exception as exc:
+                    LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
+                    failed_pages.append(
+                        {
+                            "page_index": page_index,
+                            "status": "failed",
+                            "error": type(exc).__name__,
+                            "detail": str(exc),
+                        }
+                    )
 
     succeeded = [results_by_page[idx] for idx in sorted(results_by_page)]
     failed_pages.sort(key=lambda fp: fp.get("page_index", 0))

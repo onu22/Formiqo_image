@@ -216,6 +216,18 @@ async def patch_job_fields(
         raise ApiHttpError(404, "field_not_found", "Field not found on the requested page") from exc
     except ValueError as exc:
         raise ApiHttpError(400, "invalid_field_patch", "Invalid field patch payload") from exc
+
+    # E7: a save through the editor is the human-correction signal — capture the touched
+    # pages as reusable templates. Best-effort; a capture failure never breaks the save.
+    if settings.template_memory_enabled:
+        try:
+            from app.services.template_memory import capture_corrected_pages
+
+            page_indices = sorted({item.page_number - 1 for item in body.fields})
+            capture_corrected_pages(output_dir, settings, page_indices=page_indices)
+        except Exception:  # noqa: BLE001 - capture is advisory, never user-facing
+            LOG.warning("template capture after PATCH fields failed for job %s", job_id, exc_info=True)
+
     return PatchFieldsResponse(fields=updated)
 
 

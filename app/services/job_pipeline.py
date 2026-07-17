@@ -88,12 +88,21 @@ def run_full_job_pipeline(
         )
         update_job_after_line_detect(job_root)
 
+        # E7: reuse human-corrected grounding for pages whose detected-line fingerprint
+        # matches a previously corrected page; those pages skip the LLM entirely.
+        template_page_results = None
+        if settings.template_memory_enabled:
+            from app.services.template_memory import match_templates_for_job
+
+            template_page_results = match_templates_for_job(output_dir, settings) or None
+
         run_semantic_grounding_for_job(
             job_id=job_id,
             output_dir=output_dir,
             settings=settings,
             provider=settings.grounding_provider,
             model=settings.grounding_model,
+            template_page_results=template_page_results,
         )
 
         # E5: optional QA refinement as the final pipeline stage (config toggle). Isolated so
