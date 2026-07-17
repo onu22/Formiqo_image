@@ -205,3 +205,33 @@ class Settings(BaseSettings):
         le=500,
         description="Spacing in pixels between labeled coordinate-grid ticks when the overlay is enabled.",
     )
+    template_memory_enabled: bool = Field(
+        default=True,
+        description=(
+            "E7 template memory. When true, a page whose normalized detected-line "
+            "fingerprint matches a previously human-corrected page reuses that corrected "
+            "grounding and skips the LLM (grounding_source=template)."
+        ),
+    )
+    templates_dir: Path = Field(
+        default=Path("./data/templates"),
+        description="Durable store for the E7 template index and per-fingerprint corrected fields.",
+    )
+    template_fingerprint_quantize: int = Field(
+        default=256,
+        ge=16,
+        le=4096,
+        description=(
+            "Grid resolution for normalizing detected-line coordinates into the page "
+            "fingerprint. Higher = stricter matching (fewer near-miss collisions)."
+        ),
+    )
+    template_min_lines: int = Field(
+        default=2,
+        ge=1,
+        le=100,
+        description=(
+            "Minimum detected lines on a page before it is eligible for a template "
+            "fingerprint. Guards against near-empty pages matching each other."
+        ),
+    )

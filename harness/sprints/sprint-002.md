@@ -33,10 +33,10 @@ goal: Post-MVP M4 — E5 vision QA refine loop; stretch M5 E7 template memory
 | T034 | E5 | M4b | Optional auto-run refine as final pipeline stage (config toggle) | LLM | T032 | DONE |
 | T035 | E5 | M4b | Surface `qa_status: flagged` in editor ("check this field") | FE | T031 | DONE |
 | T036 | E5 | M4b | Document judge cost/latency (tokens per page per iteration) | LLM | T033 | DONE |
-| T040 | E7 | M5 | Page fingerprint from normalized detected-line layout | LLM | E6 | TODO |
-| T041 | E7 | M5 | Template index under `data/` + reuse on fingerprint match | LLM | T040 | TODO |
-| T042 | E7 | M5 | Skip LLM for matched pages; `grounding_source: template` | LLM | T041 | TODO |
-| T043 | E7 | M5 | Near-miss / false-positive tests | LLM | T042 | TODO |
+| T040 | E7 | M5 | Page fingerprint from normalized detected-line layout | LLM | E6 | IN_PROGRESS |
+| T041 | E7 | M5 | Template index under `data/` + reuse on fingerprint match | LLM | T040 | IN_PROGRESS |
+| T042 | E7 | M5 | Skip LLM for matched pages; `grounding_source: template` | LLM | T041 | IN_PROGRESS |
+| T043 | E7 | M5 | Near-miss / false-positive tests | LLM | T042 | IN_PROGRESS |
 
 Status: `TODO` · `IN_PROGRESS` · `BLOCKED` · `IN_REVIEW` · `DONE`
 

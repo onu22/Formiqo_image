@@ -36,6 +36,7 @@ from app.services.grounding_schema import (
 from app.services.label_anchors import extract_label_anchors
 from app.services.line_detection_job import list_converted_page_pngs
 from app.services.stamping_config import write_stamping_json_sample
+from app.services.template_memory import load_template_grounding_for_page
 
 LOG = logging.getLogger(__name__)
 
@@ -685,6 +686,37 @@ def write_field_grounding_outputs(
     }
 
 
+def _partition_template_pages(
+    *,
+    output_dir: Path,
+    targets: list[int],
+    settings: Settings,
+) -> tuple[dict[int, dict[str, Any]], list[int]]:
+    """Split page targets into template-matched pages and pages still needing the LLM.
+
+    Template lookup is best-effort per page: a lookup failure never blocks grounding, it
+    just routes the page to the LLM as usual.
+    """
+    template_results: dict[int, dict[str, Any]] = {}
+    llm_targets: list[int] = []
+    for idx in targets:
+        try:
+            tpl = load_template_grounding_for_page(
+                settings=settings,
+                output_dir=output_dir,
+                page_index=idx,
+            )
+        except Exception as exc:  # pragma: no cover - defensive; never fail on template lookup
+            LOG.warning("template lookup failed page=%d: %s", idx, exc)
+            tpl = None
+        if tpl is not None:
+            LOG.info("template match page=%d fingerprint=%s (skipping LLM)", idx, tpl.get("_template_fingerprint"))
+            template_results[idx] = {"page_index": idx, "grounding": tpl}
+        else:
+            llm_targets.append(idx)
+    return template_results, llm_targets
+
+
 def run_semantic_grounding_for_job(
     *,
     job_id: str,
@@ -696,22 +728,36 @@ def run_semantic_grounding_for_job(
     prov, resolved_model = resolve_grounding_model(provider=provider, model=model, settings=settings)
     configure_prompt_dir(settings.grounding_prompt_dir)
 
-    openai_client: OpenAI | None = None
-    anthropic_client: Anthropic | None = None
-    if prov == "openai":
-        if not settings.openai_api_key.strip():
-            raise ValueError("FORMIQO_OPENAI_API_KEY is missing for provider=openai.")
-        openai_client = OpenAI(api_key=settings.openai_api_key)
-    else:
-        if not settings.anthropic_api_key.strip():
-            raise ValueError("FORMIQO_ANTHROPIC_API_KEY is missing for provider=anthropic.")
-        anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
-
     page_entries = list_converted_page_pngs(output_dir)
     if not page_entries:
         raise ValueError("No converted page PNGs found; run conversion and line detection first.")
 
     targets = sorted(idx for idx, _ in page_entries)
+
+    # E7 template memory: pages whose normalized detected-line fingerprint matches a
+    # previously human-corrected page reuse the stored grounding and skip the LLM. When
+    # every page matches, no provider client is constructed (zero LLM calls, no API key
+    # required), satisfying the E7 "re-upload produces ready with zero LLM calls" criterion.
+    template_results: dict[int, dict[str, Any]] = {}
+    llm_targets: list[int] = list(targets)
+    if settings.template_memory_enabled:
+        template_results, llm_targets = _partition_template_pages(
+            output_dir=output_dir,
+            targets=targets,
+            settings=settings,
+        )
+
+    openai_client: OpenAI | None = None
+    anthropic_client: Anthropic | None = None
+    if llm_targets:
+        if prov == "openai":
+            if not settings.openai_api_key.strip():
+                raise ValueError("FORMIQO_OPENAI_API_KEY is missing for provider=openai.")
+            openai_client = OpenAI(api_key=settings.openai_api_key)
+        else:
+            if not settings.anthropic_api_key.strip():
+                raise ValueError("FORMIQO_ANTHROPIC_API_KEY is missing for provider=anthropic.")
+            anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     job_root_dir = output_dir.parent
     progress_lock = threading.Lock()
@@ -723,7 +769,7 @@ def run_semantic_grounding_for_job(
             job_root_dir,
             "grounding",
             status="running",
-            grounded_pages=0,
+            grounded_pages=len(template_results),
             total_pages=len(targets),
         )
     except FileNotFoundError:
@@ -751,32 +797,32 @@ def run_semantic_grounding_for_job(
             anthropic_client=anthropic_client,
         )
 
-    succeeded: list[dict[str, Any]] = []
     failed_pages: list[dict[str, Any]] = []
 
     # Bounded parallelism: a multi-page form grounds in roughly the time of its slowest
     # pages, not the sum. Each page is isolated so one failure never sinks the others.
-    max_workers = max(1, min(settings.grounding_max_concurrency, len(targets)))
-    results_by_page: dict[int, dict[str, Any]] = {}
-    completed = 0
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_page = {executor.submit(_ground, idx): idx for idx in targets}
-        for future in as_completed(future_to_page):
-            page_index = future_to_page[future]
-            try:
-                results_by_page[page_index] = future.result()
-                completed += 1
-                _record_progress(completed)
-            except Exception as exc:
-                LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
-                failed_pages.append(
-                    {
-                        "page_index": page_index,
-                        "status": "failed",
-                        "error": type(exc).__name__,
-                        "detail": str(exc),
-                    }
-                )
+    results_by_page: dict[int, dict[str, Any]] = dict(template_results)
+    completed = len(template_results)
+    if llm_targets:
+        max_workers = max(1, min(settings.grounding_max_concurrency, len(llm_targets)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_page = {executor.submit(_ground, idx): idx for idx in llm_targets}
+            for future in as_completed(future_to_page):
+                page_index = future_to_page[future]
+                try:
+                    results_by_page[page_index] = future.result()
+                    completed += 1
+                    _record_progress(completed)
+                except Exception as exc:
+                    LOG.warning("semantic grounding failed page %d: %s", page_index, exc)
+                    failed_pages.append(
+                        {
+                            "page_index": page_index,
+                            "status": "failed",
+                            "error": type(exc).__name__,
+                            "detail": str(exc),
+                        }
+                    )
 
     succeeded = [results_by_page[idx] for idx in sorted(results_by_page)]
     failed_pages.sort(key=lambda fp: fp.get("page_index", 0))
@@ -798,6 +844,8 @@ def run_semantic_grounding_for_job(
     summary["succeeded_count"] = len(succeeded)
     summary["page_count"] = len(succeeded) + len(failed_pages)
     summary["failed_pages"] = failed_pages
+    summary["template_pages"] = len(template_results)
+    summary["llm_pages"] = len(llm_targets)
 
     if failed_pages:
         from app.services.jobs import read_job_manifest, update_job_stage, write_job_manifest
