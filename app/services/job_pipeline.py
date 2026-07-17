@@ -95,6 +95,9 @@ def run_full_job_pipeline(
             provider=settings.grounding_provider,
             model=settings.grounding_model,
         )
+
+        if settings.grounding_qa_enabled:
+            _run_auto_qa_refine(job_id=job_id, job_root=job_root, output_dir=output_dir, settings=settings)
     except SemanticGroundingJobError as exc:
         LOG.warning("job pipeline grounding failed job_id=%s: %s", job_id, exc)
         manifest = read_job_manifest(job_root)
@@ -116,6 +119,44 @@ def run_full_job_pipeline(
         except FileNotFoundError:
             pass
         raise
+
+
+def _run_auto_qa_refine(
+    *,
+    job_id: str,
+    job_root: Path,
+    output_dir: Path,
+    settings: Settings,
+) -> None:
+    """Run the E5 QA loop as the final pipeline stage; never fail the job on QA errors.
+
+    Grounding already succeeded and the job is ``ready``; a QA-loop failure (e.g. a missing
+    judge API key) is recorded on ``stages.qa_refine`` but must not flip the job to failed.
+    """
+    from app.services.grounding_qa import run_grounding_qa_refinement
+    from app.services.jobs import update_job_stage
+
+    try:
+        update_job_stage(job_root, "qa_refine", status="running")
+        summary = run_grounding_qa_refinement(
+            job_id=job_id,
+            output_dir=output_dir,
+            settings=settings,
+        )
+        LOG.info(
+            "qa_refine auto-run job_id=%s iterations=%d converged=%s adjusted=%d flagged=%d",
+            job_id,
+            summary["iterations"],
+            summary["converged"],
+            summary["fields_adjusted"],
+            summary["fields_flagged"],
+        )
+    except Exception as exc:  # noqa: BLE001 - QA loop is best-effort; keep the job ready
+        LOG.warning("qa_refine auto-run failed job_id=%s: %s", job_id, exc)
+        try:
+            update_job_stage(job_root, "qa_refine", status="failed", error=str(exc))
+        except FileNotFoundError:
+            pass
 
 
 def delete_job_tree(job_root: Path) -> None:

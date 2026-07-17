@@ -7,7 +7,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import ValidationError
 
@@ -24,6 +24,8 @@ from app.schemas import (
     PatchFieldsResponse,
     PatchValuesRequest,
     PatchValuesResponse,
+    RefineGroundingRequest,
+    RefineGroundingResponse,
     StampImagesRunResponse,
     StampPdfRunResponse,
     StampingJson,
@@ -35,6 +37,7 @@ from app.services.fields_service import (
     resolve_export_pdf_path,
     resolve_page_image_path,
 )
+from app.services.grounding_qa import run_grounding_qa_refinement
 from app.services.image_stamping import run_image_stamping_for_job
 from app.services.job_pipeline import (
     delete_job_tree,
@@ -234,6 +237,33 @@ async def patch_job_values(
     except ValueError as exc:
         raise ApiHttpError(400, "invalid_values_patch", "Invalid values patch payload") from exc
     return PatchValuesResponse(**result)
+
+
+@router.post(
+    "/jobs/{job_id}/refine-grounding",
+    response_model=RefineGroundingResponse,
+    summary="Run the E5 vision QA refinement loop (stamp → judge → bounded delta → re-stamp)",
+)
+async def refine_grounding(
+    job_id: str,
+    body: RefineGroundingRequest = Body(default_factory=RefineGroundingRequest),
+    settings: Settings = Depends(get_settings),
+) -> RefineGroundingResponse:
+    _, _, output_dir = _resolve_job(settings, job_id)
+    try:
+        summary = await asyncio.to_thread(
+            run_grounding_qa_refinement,
+            job_id=job_id,
+            output_dir=output_dir,
+            settings=settings,
+            max_iterations=body.max_iterations,
+        )
+    except FileNotFoundError as exc:
+        raise ApiHttpError(400, "refine_prerequisites_missing", "Grounded fields not found for this job") from exc
+    except ValueError as exc:
+        # Missing judge API key or unsupported provider surfaces here.
+        raise ApiHttpError(400, "refine_failed", str(exc)) from exc
+    return RefineGroundingResponse(**summary)
 
 
 @router.post(

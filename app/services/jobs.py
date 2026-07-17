@@ -326,6 +326,21 @@ def job_detail_projection(manifest: dict[str, Any]) -> dict[str, Any]:
         if grounding.get("status"):
             stages_out["grounding"]["status"] = grounding["status"]
 
+    qa_refine = stages.get("qa_refine")
+    if isinstance(qa_refine, dict):
+        qa_out: dict[str, Any] = {"status": qa_refine.get("status", "skipped")}
+        for key in (
+            "iterations",
+            "converged",
+            "fields_total",
+            "fields_confirmed",
+            "fields_adjusted",
+            "fields_flagged",
+        ):
+            if key in qa_refine:
+                qa_out[key] = qa_refine[key]
+        stages_out["qa_refine"] = qa_out
+
     errors: list[Any] = []
     for stage_name, node in stages.items():
         if not isinstance(node, dict):

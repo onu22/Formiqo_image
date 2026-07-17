@@ -98,6 +98,35 @@ class StampPdfRunResponse(BaseModel):
     download_url: str
 
 
+class RefineGroundingRequest(BaseModel):
+    """Optional overrides for ``POST /jobs/{id}/refine-grounding``."""
+
+    model_config = {"extra": "ignore"}
+    max_iterations: int | None = Field(
+        default=None,
+        ge=1,
+        le=10,
+        description="Override grounding_qa_max_iterations for this run.",
+    )
+
+
+class RefineGroundingResponse(BaseModel):
+    job_id: str
+    judge_provider: str
+    judge_model: str
+    iterations: int
+    max_iterations: int
+    converged: bool
+    max_bbox_delta_px: int
+    fields_total: int
+    fields_confirmed: int
+    fields_adjusted: int
+    fields_flagged: int
+    iteration_metrics: list[dict[str, Any]] = Field(default_factory=list)
+    cost: dict[str, Any] = Field(default_factory=dict)
+    run_dir: str
+
+
 class FormLineDetectorConfig(BaseModel):
     """Optional OpenCV overrides for ``POST /user-uploads/process-convert-line-detect`` body ``config``."""
 
