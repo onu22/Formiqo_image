@@ -28,14 +28,18 @@ _PNG_BYTES = b"\x89PNG\r\n\x1a\n"
 
 
 def _lines(scale: float = 1.0) -> dict[str, Any]:
-    """A four-line single-cell layout, optionally scaled (dims + coords) to test invariance."""
+    """A four-line single-cell layout, optionally scaled (dims + coords) to test invariance.
+
+    Line thickness scales with the page too, mirroring a higher-DPI re-render.
+    """
+    t = max(1, int(round(2 * scale)))
     return {
         "image": {"width": int(500 * scale), "height": int(300 * scale)},
         "lines": [
-            {"line_id": "line_h_001", "orientation": "horizontal", "bbox": {"x": int(0 * scale), "y": int(100 * scale), "w": int(500 * scale), "h": 2}},
-            {"line_id": "line_h_002", "orientation": "horizontal", "bbox": {"x": int(0 * scale), "y": int(200 * scale), "w": int(500 * scale), "h": 2}},
-            {"line_id": "line_v_001", "orientation": "vertical", "bbox": {"x": int(100 * scale), "y": int(0 * scale), "w": 2, "h": int(300 * scale)}},
-            {"line_id": "line_v_002", "orientation": "vertical", "bbox": {"x": int(400 * scale), "y": int(0 * scale), "w": 2, "h": int(300 * scale)}},
+            {"line_id": "line_h_001", "orientation": "horizontal", "bbox": {"x": int(0 * scale), "y": int(100 * scale), "w": int(500 * scale), "h": t}},
+            {"line_id": "line_h_002", "orientation": "horizontal", "bbox": {"x": int(0 * scale), "y": int(200 * scale), "w": int(500 * scale), "h": t}},
+            {"line_id": "line_v_001", "orientation": "vertical", "bbox": {"x": int(100 * scale), "y": int(0 * scale), "w": t, "h": int(300 * scale)}},
+            {"line_id": "line_v_002", "orientation": "vertical", "bbox": {"x": int(400 * scale), "y": int(0 * scale), "w": t, "h": int(300 * scale)}},
         ],
     }
 
