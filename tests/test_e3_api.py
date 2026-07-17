@@ -29,7 +29,11 @@ def jobs_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def client(jobs_dir: Path) -> TestClient:
-    settings = Settings(jobs_dir=jobs_dir, openai_api_key="test-key")
+    settings = Settings(
+        jobs_dir=jobs_dir,
+        templates_dir=jobs_dir.parent / "templates",
+        openai_api_key="test-key",
+    )
 
     def _settings_override() -> Settings:
         return settings
