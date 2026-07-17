@@ -88,12 +88,17 @@ def run_full_job_pipeline(
         )
         update_job_after_line_detect(job_root)
 
+        # E7: reuse human-corrected templates for any page whose detected-line fingerprint
+        # matches a prior corrected job; those pages skip the LLM entirely.
+        template_page_results = _match_templates(job_id=job_id, output_dir=output_dir, settings=settings)
+
         run_semantic_grounding_for_job(
             job_id=job_id,
             output_dir=output_dir,
             settings=settings,
             provider=settings.grounding_provider,
             model=settings.grounding_model,
+            template_page_results=template_page_results,
         )
 
         if settings.grounding_qa_enabled:
@@ -119,6 +124,27 @@ def run_full_job_pipeline(
         except FileNotFoundError:
             pass
         raise
+
+
+def _match_templates(
+    *,
+    job_id: str,
+    output_dir: Path,
+    settings: Settings,
+) -> dict[int, dict]:
+    """Best-effort E7 template lookup; never fail the job on a template-store error."""
+    if not settings.template_memory_enabled:
+        return {}
+    try:
+        from app.services.template_memory import match_templates_for_job
+
+        matched = match_templates_for_job(output_dir=output_dir, settings=settings)
+        if matched:
+            LOG.info("template reuse job_id=%s pages=%s", job_id, sorted(matched))
+        return matched
+    except Exception as exc:  # noqa: BLE001 - template memory is an optimization, never required
+        LOG.warning("template matching failed job_id=%s: %s", job_id, exc)
+        return {}
 
 
 def _run_auto_qa_refine(
