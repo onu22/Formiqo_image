@@ -2,11 +2,11 @@
 
 ## Cycle status
 
-The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-b514`.
+The run-mvp conductor executed on branch `cursor/formiqo-mvp-progress-eb25`.
 
-**Outcome:** MVP ship condition already satisfied. `harness-next.sh` reports `ACTION=complete` because G4 is **QA APPROVED**.
+**Outcome:** MVP ship remains unblocked. `harness-next.sh` reports `ACTION=complete` because G4 is **QA APPROVED**.
 
-Current gates at cycle start:
+Current gates after this cycle:
 
 - G1 architecture: APPROVED WITH CONDITIONS
 - G2 parity: QA APPROVED
@@ -25,39 +25,31 @@ REASON=G4 QA APPROVED - MVP shippable
 
 ## Startup commands
 
-Executed successfully:
+Executed successfully as required by the automation prompt:
 
 ```bash
 ./scripts/harness-status.sh
 ./scripts/harness-next.sh
 ```
 
-Status summary:
+Startup status summary:
 
-```text
-Gates:
-  G1-architecture: APPROVED WITH CONDITIONS
-  G2-parity: QA APPROVED
-  G3-security: APPROVED WITH CONDITIONS
-  G4-ship: QA APPROVED
-
-Active sprint: sprint-001.md
-  Tasks: DONE=25 TODO=0 BLOCKED=0
-```
+- Active sprint: `sprint-001.md`
+- Sprint task counts: DONE=25, TODO=0, BLOCKED=0
+- G4 ship gate: QA APPROVED
+- Next action: COMPLETE / MVP shippable
 
 ## Work completed this cycle
 
 - Read and followed `.cursor/skills/run-mvp/SKILL.md`.
-- Ran the required harness status and next-action scripts.
-- Confirmed the conductor stop condition: G4 ship review is **QA APPROVED**.
-- Confirmed active sprint backlog has no remaining TODO or BLOCKED tasks.
-- No epic or gate delegation was required because `harness-next.sh` returned `ACTION=complete`.
+- Ran the required harness status and next-action commands.
+- Confirmed no new epic or gate delegation was needed because the harness is already at the `/run-mvp` stop condition.
+- Verified `harness/gates/G4-ship.md` records **QA APPROVED** and unblocks MVP ship.
+- Verified `harness/sprints/CURRENT` has all sprint backlog tasks marked `DONE`.
 
 ## Verification
 
-No backend or LLM implementation changed in this cycle, so pytest was not rerun.
-
-PM verification:
+PM verification commands:
 
 ```bash
 ./scripts/harness-status.sh
@@ -67,10 +59,12 @@ git status --short --branch
 
 Results:
 
-- G4 ship: QA APPROVED.
-- Next action: COMPLETE / MVP shippable.
-- Branch: `cursor/formiqo-mvp-progress-b514`.
+- `./scripts/harness-status.sh`: G1, G2, G3, and G4 are approved or approved with conditions; active sprint has no TODO or BLOCKED tasks.
+- `./scripts/harness-next.sh`: `ACTION=complete`, `TARGET=MVP`, `REASON=G4 QA APPROVED - MVP shippable`.
+- `git status --short --branch`: working branch is `cursor/formiqo-mvp-progress-eb25`.
+
+No backend or LLM code changed in this cycle, so pytest was not rerun.
 
 ## Stop condition
 
-The conductor stops because G4 is **QA APPROVED**, satisfying the `/run-mvp` MVP ship condition. No hard blockers remain.
+The conductor stops because G4 is **QA APPROVED**, satisfying the `/run-mvp` MVP ship condition in `harness/RUN-MVP.md`. No hard blockers remain.
