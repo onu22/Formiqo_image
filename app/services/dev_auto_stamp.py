@@ -5,7 +5,7 @@ Does not change grounding or stamping algorithms. Opt-in via
 
 Fixture formats (extensible for other forms)
 --------------------------------------------
-1. Mapped nested profile (this IMM 5645E sample)::
+1. Mapped nested profile::
 
     {
       "id": "imm5645e-okafor",
@@ -127,8 +127,321 @@ def map_imm5645e(data: Mapping[str, Any]) -> dict[str, str]:
     return out
 
 
+def _apply_yes_no(*, yes: bool, yes_key: str, no_key: str, out: dict[str, str]) -> None:
+    out[yes_key] = "true" if yes else ""
+    out[no_key] = "" if yes else "true"
+
+
+def map_company_candidate_qual(data: Mapping[str, Any]) -> dict[str, str]:
+    """Nested company/candidate/qualifications profile → grounded field ids.
+
+    Used for forms like ``4abad1c6-61dc-47d4-b17e-afdb2b12577a.pdf``.
+    """
+    out: dict[str, str] = {}
+
+    company = data.get("company")
+    if isinstance(company, Mapping):
+        for src, field_id in (
+            ("companyName", "company_name"),
+            ("email", "email"),
+            ("agentName", "agent_name"),
+            ("mobileNumber", "mobile_no_company"),
+        ):
+            if src in company and company[src] is not None:
+                out[field_id] = _as_str(company[src])
+
+    candidate = data.get("candidate")
+    if isinstance(candidate, Mapping):
+        for src, field_id in (
+            ("surname", "surname"),
+            ("fullNames", "full_names"),
+            ("maidenName", "maiden_name"),
+            ("dateOfBirth", "date_of_birth"),
+            ("idNumber", "id_number_or_identifier"),
+            ("identifierDescription", "description_of_identifier"),
+            ("physicalAddress", "physical_address"),
+            ("mobileNumber", "mobile_number"),
+        ):
+            if src in candidate and candidate[src] is not None:
+                out[field_id] = _as_str(candidate[src])
+        # Grounding also exposes candidate_mobile_number separately.
+        if "mobileNumber" in candidate and candidate["mobileNumber"] is not None:
+            out["candidate_mobile_number"] = _as_str(candidate["mobileNumber"])
+        if "previousChargesOrConvictions" in candidate and candidate["previousChargesOrConvictions"] is not None:
+            _apply_yes_no(
+                yes=bool(candidate["previousChargesOrConvictions"]),
+                yes_key="previous_charges_yes",
+                no_key="previous_charges_no",
+                out=out,
+            )
+        details = candidate.get("convictionDetails")
+        if isinstance(details, Mapping):
+            for src, field_id in (
+                ("dateConvicted", "date_convicted"),
+                ("offence", "offence"),
+                ("sentence", "sentence"),
+            ):
+                if src in details and details[src] is not None:
+                    out[field_id] = _as_str(details[src])
+
+    qualifications = data.get("qualifications")
+    if isinstance(qualifications, list):
+        for i, qual in enumerate(qualifications, start=1):
+            if not isinstance(qual, Mapping):
+                continue
+            for src, suffix in (
+                ("qualificationName", "qualification_name"),
+                ("institutionName", "institution_name"),
+                ("dateObtained", "date_obtained"),
+                ("studentNumber", "student_no"),
+                ("certificateNumber", "certificate_no"),
+                ("examNumber", "exam_no"),
+            ):
+                if src in qual and qual[src] is not None:
+                    out[f"{suffix}_{i}"] = _as_str(qual[src])
+
+    signatures = data.get("signatures")
+    if isinstance(signatures, Mapping):
+        for src, field_id in (
+            ("candidateSignature", "candidate_signature"),
+            ("candidateMobileNumber", "candidate_mobile_number"),
+            ("companyAgentSignature", "company_agent_signature"),
+            ("companyDate", "company_agent_date"),
+        ):
+            if src in signatures and signatures[src] is not None:
+                out[field_id] = _as_str(signatures[src])
+        # Grounding exposes both candidate_date and candidate_signature_date.
+        if "candidateDate" in signatures and signatures["candidateDate"] is not None:
+            date_val = _as_str(signatures["candidateDate"])
+            out["candidate_date"] = date_val
+            out["candidate_signature_date"] = date_val
+
+    # consent.forcedOrCoerced has no grounded field_id on this form yet; ignored safely.
+
+    return out
+
+
+def map_labeled_questions(data: Mapping[str, Any]) -> dict[str, str]:
+    """Map ``questions[{label, value}]`` via ``label_to_field`` to grounded field ids.
+
+    Example ``data``::
+
+        {
+          "label_to_field": {"First name": "first_name", ...},
+          "questions": [{"label": "First name", "value": "Ada"}, ...]
+        }
+    """
+    out: dict[str, str] = {}
+    raw_map = data.get("label_to_field")
+    if not isinstance(raw_map, Mapping):
+        raise ValueError("labeled_questions mapper requires data.label_to_field object")
+
+    # Exact + casefold lookup
+    label_to_field: dict[str, str] = {}
+    label_to_field_cf: dict[str, str] = {}
+    for label, field_id in raw_map.items():
+        if not isinstance(label, str) or not isinstance(field_id, str):
+            continue
+        label_to_field[label] = field_id
+        label_to_field_cf[label.casefold()] = field_id
+
+    questions = data.get("questions")
+    if not isinstance(questions, list):
+        return out
+
+    for item in questions:
+        if not isinstance(item, Mapping):
+            continue
+        label = item.get("label")
+        if not isinstance(label, str):
+            continue
+        field_id = label_to_field.get(label) or label_to_field_cf.get(label.casefold())
+        if not field_id:
+            continue
+        if "value" in item and item["value"] is not None:
+            out[field_id] = _as_str(item["value"])
+    return out
+
+
+def _set_aliases(out: dict[str, str], value: str, *field_ids: str) -> None:
+    """Write the same value under several candidate field_ids; unknown ones are filtered later."""
+    for field_id in field_ids:
+        out[field_id] = value
+
+
+def map_i765(data: Mapping[str, Any]) -> dict[str, str]:
+    """USCIS Form I-765 nested profile → likely grounded ``field_id`` values.
+
+    Emits a few snake_case aliases per logical field so the first grounding run
+    can still match via ``filter_to_known_fields``.
+    """
+    out: dict[str, str] = {}
+
+    part1 = data.get("part1")
+    if isinstance(part1, Mapping):
+        reason = part1.get("reasonForApplying")
+        if isinstance(reason, Mapping):
+            selected = reason.get("selectedOption")
+            initial = bool(reason.get("initialPermission")) if "initialPermission" in reason else selected == "initialPermission"
+            replacement = (
+                bool(reason.get("replacementOrCorrection"))
+                if "replacementOrCorrection" in reason
+                else selected == "replacementOrCorrection"
+            )
+            renewal = bool(reason.get("renewal")) if "renewal" in reason else selected == "renewal"
+            _set_aliases(
+                out,
+                "true" if initial else "",
+                "initial_permission",
+                "reason_initial_permission",
+                "part1_initial_permission",
+                "part1_1a_initial_permission",
+            )
+            _set_aliases(
+                out,
+                "true" if replacement else "",
+                "replacement_or_correction",
+                "reason_replacement_or_correction",
+                "part1_replacement_or_correction",
+                "part1_1b_replacement_or_correction",
+            )
+            _set_aliases(
+                out,
+                "true" if renewal else "",
+                "renewal",
+                "reason_renewal",
+                "part1_renewal",
+                "part1_1c_renewal",
+            )
+
+    part2 = data.get("part2")
+    if isinstance(part2, Mapping):
+        legal = part2.get("fullLegalName")
+        if isinstance(legal, Mapping):
+            if legal.get("familyName") is not None:
+                _set_aliases(
+                    out,
+                    _as_str(legal["familyName"]),
+                    "family_name",
+                    "full_legal_name_family_name",
+                    "part2_family_name",
+                    "part2_1a_family_name",
+                )
+            if legal.get("givenName") is not None:
+                _set_aliases(
+                    out,
+                    _as_str(legal["givenName"]),
+                    "given_name",
+                    "full_legal_name_given_name",
+                    "part2_given_name",
+                    "part2_1b_given_name",
+                )
+            if legal.get("middleName") is not None:
+                _set_aliases(
+                    out,
+                    _as_str(legal["middleName"]),
+                    "middle_name",
+                    "full_legal_name_middle_name",
+                    "part2_middle_name",
+                    "part2_1c_middle_name",
+                )
+        others = part2.get("otherNamesUsed")
+        if isinstance(others, list):
+            for i, name in enumerate(others, start=1):
+                if not isinstance(name, Mapping):
+                    continue
+                if name.get("familyName") is not None:
+                    _set_aliases(
+                        out,
+                        _as_str(name["familyName"]),
+                        f"other_name_{i}_family_name",
+                        f"other_names_{i}_family_name",
+                        f"part2_other_name_{i}_family_name",
+                    )
+                if name.get("givenName") is not None:
+                    _set_aliases(
+                        out,
+                        _as_str(name["givenName"]),
+                        f"other_name_{i}_given_name",
+                        f"other_names_{i}_given_name",
+                        f"part2_other_name_{i}_given_name",
+                    )
+                if name.get("middleName") is not None:
+                    _set_aliases(
+                        out,
+                        _as_str(name["middleName"]),
+                        f"other_name_{i}_middle_name",
+                        f"other_names_{i}_middle_name",
+                        f"part2_other_name_{i}_middle_name",
+                    )
+
+    uscis = data.get("uscisUseOnly")
+    if isinstance(uscis, Mapping):
+        for src, aliases in (
+            (
+                "authorizationValidFrom",
+                (
+                    "authorization_valid_from",
+                    "uscis_authorization_valid_from",
+                ),
+            ),
+            (
+                "authorizationValidThrough",
+                (
+                    "authorization_valid_through",
+                    "uscis_authorization_valid_through",
+                ),
+            ),
+            (
+                "alienRegistrationNumber",
+                (
+                    "alien_registration_number",
+                    "uscis_alien_registration_number",
+                    "a_number",
+                ),
+            ),
+            ("remarks", ("remarks", "uscis_remarks")),
+        ):
+            if src in uscis and uscis[src] is not None:
+                _set_aliases(out, _as_str(uscis[src]), *aliases)
+
+    rep = data.get("representative")
+    if isinstance(rep, Mapping):
+        if "formG28Attached" in rep and rep["formG28Attached"] is not None:
+            yes = bool(rep["formG28Attached"])
+            _set_aliases(
+                out,
+                "true" if yes else "",
+                "form_g28_attached",
+                "g28_attached",
+                "attorney_form_g28_attached",
+            )
+            # If the form uses yes/no pair checkboxes:
+            out["form_g28_attached_yes"] = "true" if yes else ""
+            out["form_g28_attached_no"] = "" if yes else "true"
+        if rep.get("attorneyStateBarNumber") is not None:
+            _set_aliases(
+                out,
+                _as_str(rep["attorneyStateBarNumber"]),
+                "attorney_state_bar_number",
+                "state_bar_number",
+            )
+        if rep.get("uscisOnlineAccountNumber") is not None:
+            _set_aliases(
+                out,
+                _as_str(rep["uscisOnlineAccountNumber"]),
+                "uscis_online_account_number",
+                "online_account_number",
+            )
+
+    return out
+
+
 MAPPERS: dict[str, MapperFn] = {
     "imm5645e": map_imm5645e,
+    "company_candidate_qual": map_company_candidate_qual,
+    "labeled_questions": map_labeled_questions,
+    "i765": map_i765,
 }
 
 

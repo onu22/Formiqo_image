@@ -1,0 +1,54 @@
+{
+  "id": "i-765-flat-1-okafor",
+  "match": ["i-765-flat-1", "i-765", "i765"],
+  "mapper": "i765",
+  "data": {
+    "form": {
+      "formType": "USCIS Form I-765",
+      "formTitle": "Application for Employment Authorization"
+    },
+    "part1": {
+      "reasonForApplying": {
+        "selectedOption": "initialPermission",
+        "initialPermission": true,
+        "replacementOrCorrection": false,
+        "renewal": false
+      }
+    },
+    "part2": {
+      "fullLegalName": {
+        "familyName": "Okafor",
+        "givenName": "Chukwudi",
+        "middleName": "Emmanuel"
+      },
+      "otherNamesUsed": [
+        {
+          "familyName": "Okafor",
+          "givenName": "Chuks",
+          "middleName": ""
+        },
+        {
+          "familyName": "",
+          "givenName": "",
+          "middleName": ""
+        },
+        {
+          "familyName": "",
+          "givenName": "",
+          "middleName": ""
+        }
+      ]
+    },
+    "uscisUseOnly": {
+      "authorizationValidFrom": "",
+      "authorizationValidThrough": "",
+      "alienRegistrationNumber": "",
+      "remarks": ""
+    },
+    "representative": {
+      "formG28Attached": false,
+      "attorneyStateBarNumber": "",
+      "uscisOnlineAccountNumber": ""
+    }
+  }
+}

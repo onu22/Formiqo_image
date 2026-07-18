@@ -1,0 +1,68 @@
+{
+  "id": "4abad1c6-okafor",
+  "match": [
+    "4abad1c6-61dc-47d4-b17e-afdb2b12577a",
+    "4abad1c6"
+  ],
+  "mapper": "company_candidate_qual",
+  "data": {
+    "company": {
+      "companyName": "Zenith Bank Plc",
+      "email": "hr@zenithbank.com",
+      "agentName": "Adebayo Johnson",
+      "mobileNumber": "+2348034567890"
+    },
+    "candidate": {
+      "surname": "Okafor",
+      "fullNames": "Chukwudi Emmanuel Okafor",
+      "maidenName": "",
+      "dateOfBirth": "1993-08-14",
+      "idNumber": "A12345678",
+      "identifierDescription": "Nigerian International Passport",
+      "physicalAddress": "15 New Market Road, Onitsha, Anambra State, Nigeria",
+      "mobileNumber": "+2348123456789",
+      "previousChargesOrConvictions": false,
+      "convictionDetails": {
+        "dateConvicted": "",
+        "offence": "",
+        "sentence": ""
+      }
+    },
+    "qualifications": [
+      {
+        "qualificationName": "Bachelor of Engineering (Computer Engineering)",
+        "institutionName": "Nnamdi Azikiwe University, Awka",
+        "dateObtained": "2015-11-21",
+        "studentNumber": "2010/ENG/04567",
+        "certificateNumber": "UNIZIK/BENG/2015/10983",
+        "examNumber": ""
+      },
+      {
+        "qualificationName": "Microsoft Certified: Azure Developer Associate",
+        "institutionName": "Microsoft",
+        "dateObtained": "2023-06-12",
+        "studentNumber": "",
+        "certificateNumber": "AZ-204-4587291",
+        "examNumber": "AZ-204"
+      },
+      {
+        "qualificationName": "Certified Kubernetes Application Developer (CKAD)",
+        "institutionName": "The Linux Foundation",
+        "dateObtained": "2024-02-08",
+        "studentNumber": "",
+        "certificateNumber": "LF-CKAD-932847",
+        "examNumber": "CKAD"
+      }
+    ],
+    "signatures": {
+      "candidateSignature": "Chukwudi Emmanuel Okafor",
+      "candidateMobileNumber": "+2348123456789",
+      "candidateDate": "2026-07-17",
+      "companyAgentSignature": "Adebayo Johnson",
+      "companyDate": "2026-07-17"
+    },
+    "consent": {
+      "forcedOrCoerced": false
+    }
+  }
+}

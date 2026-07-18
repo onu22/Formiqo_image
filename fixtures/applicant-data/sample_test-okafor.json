@@ -1,0 +1,31 @@
+{
+  "id": "sample_test-okafor",
+  "match": ["sample_test", "simple_test"],
+  "mapper": "labeled_questions",
+  "data": {
+    "label_to_field": {
+      "First name": "first_name",
+      "Last name": "last_name",
+      "How old are you?": "age",
+      "What is one personality trait you've worked hard to change, and what led you to realize it needed to shift?": "personality_trait_response"
+    },
+    "questions": [
+      {
+        "label": "First name",
+        "value": "Chukwudi"
+      },
+      {
+        "label": "Last name",
+        "value": "Okafor"
+      },
+      {
+        "label": "How old are you?",
+        "value": 32
+      },
+      {
+        "label": "What is one personality trait you've worked hard to change, and what led you to realize it needed to shift?",
+        "value": "Earlier in my career I wanted everything to happen immediately and often became frustrated when projects moved slowly. Working on large software projects taught me the value of collaboration, planning, and patience. I now take time to understand different perspectives, communicate calmly, and focus on long-term results instead of immediate outcomes."
+      }
+    ]
+  }
+}

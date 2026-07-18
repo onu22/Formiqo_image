@@ -17,9 +17,9 @@ from app.services.dev_auto_stamp import (
 )
 
 
-FIXTURE_PATH = (
-    Path(__file__).resolve().parent.parent / "fixtures" / "applicant-data" / "imm5645e-okafor.json"
-)
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "applicant-data"
+FIXTURE_PATH = FIXTURES_DIR / "imm5645e-okafor.json"
+QUAL_FIXTURE_PATH = FIXTURES_DIR / "4abad1c6-okafor.json"
 
 
 def test_map_imm5645e_from_committed_fixture() -> None:
@@ -35,6 +35,89 @@ def test_map_imm5645e_from_committed_fixture() -> None:
     assert values["sibling_4_present_occupation"] == "University Student"
     assert values["certification_signature"] == "Chukwudi Emmanuel Okafor"
     assert values["certification_date"] == "2026-07-17"
+
+
+def test_map_company_candidate_qual_from_committed_fixture() -> None:
+    payload = json.loads(QUAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+    values = fixture_to_values(payload)
+
+    assert values["company_name"] == "Zenith Bank Plc"
+    assert values["agent_name"] == "Adebayo Johnson"
+    assert values["mobile_no_company"] == "+2348034567890"
+    assert values["surname"] == "Okafor"
+    assert values["full_names"] == "Chukwudi Emmanuel Okafor"
+    assert values["id_number_or_identifier"] == "A12345678"
+    assert values["description_of_identifier"] == "Nigerian International Passport"
+    assert values["previous_charges_yes"] == ""
+    assert values["previous_charges_no"] == "true"
+    assert values["qualification_name_1"].startswith("Bachelor of Engineering")
+    assert values["institution_name_2"] == "Microsoft"
+    assert values["exam_no_3"] == "CKAD"
+    assert values["candidate_signature"] == "Chukwudi Emmanuel Okafor"
+    assert values["candidate_date"] == "2026-07-17"
+    assert values["candidate_signature_date"] == "2026-07-17"
+    assert values["company_agent_signature"] == "Adebayo Johnson"
+    assert values["company_agent_date"] == "2026-07-17"
+
+
+def test_resolve_qual_fixture_by_uuid_filename(tmp_path: Path) -> None:
+    settings = Settings(
+        dev_auto_stamp_fixture="",
+        dev_auto_stamp_fixture_dir=FIXTURES_DIR,
+    )
+    resolved = resolve_fixture_path(
+        settings,
+        source_filename="4abad1c6-61dc-47d4-b17e-afdb2b12577a.pdf",
+    )
+    assert resolved == QUAL_FIXTURE_PATH
+
+
+def test_map_labeled_questions_sample_test_fixture() -> None:
+    payload = json.loads((FIXTURES_DIR / "sample_test-okafor.json").read_text(encoding="utf-8"))
+    values = fixture_to_values(payload)
+    assert values["first_name"] == "Chukwudi"
+    assert values["last_name"] == "Okafor"
+    assert values["age"] == "32"
+    assert "collaboration" in values["personality_trait_response"]
+
+
+def test_resolve_sample_test_fixture() -> None:
+    settings = Settings(
+        dev_auto_stamp_fixture="",
+        dev_auto_stamp_fixture_dir=FIXTURES_DIR,
+    )
+    assert resolve_fixture_path(settings, source_filename="simple_test.pdf") == (
+        FIXTURES_DIR / "sample_test-okafor.json"
+    )
+    assert resolve_fixture_path(settings, source_filename="sample_test.pdf") == (
+        FIXTURES_DIR / "sample_test-okafor.json"
+    )
+
+
+def test_map_i765_fixture() -> None:
+    payload = json.loads((FIXTURES_DIR / "i-765-flat-1-okafor.json").read_text(encoding="utf-8"))
+    values = fixture_to_values(payload)
+    assert values["initial_permission"] == "true"
+    assert values["replacement_or_correction"] == ""
+    assert values["renewal"] == ""
+    assert values["family_name"] == "Okafor"
+    assert values["given_name"] == "Chukwudi"
+    assert values["middle_name"] == "Emmanuel"
+    assert values["other_name_1_given_name"] == "Chuks"
+    assert values["form_g28_attached"] == ""
+    assert values["form_g28_attached_no"] == "true"
+    # Aliases present for post-ground filter matching
+    assert values["part2_1a_family_name"] == "Okafor"
+
+
+def test_resolve_i765_fixture() -> None:
+    settings = Settings(
+        dev_auto_stamp_fixture="",
+        dev_auto_stamp_fixture_dir=FIXTURES_DIR,
+    )
+    assert resolve_fixture_path(settings, source_filename="i-765-flat-1.pdf") == (
+        FIXTURES_DIR / "i-765-flat-1-okafor.json"
+    )
 
 
 def test_fixture_flat_values_format() -> None:
