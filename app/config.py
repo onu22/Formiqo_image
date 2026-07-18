@@ -235,3 +235,30 @@ class Settings(BaseSettings):
             "fingerprint. Guards against near-empty pages matching each other."
         ),
     )
+    # --- Dev / test: auto-stamp after grounding (does not change grounding algo) ---
+    dev_auto_stamp_after_grounding: bool = Field(
+        default=False,
+        description=(
+            "When true, after grounding (and optional QA refine) finishes, fill "
+            "stamping.json from a fixture and run image/PDF stamping. Dev/test only."
+        ),
+    )
+    dev_auto_stamp_fixture: str = Field(
+        default="",
+        description=(
+            "Optional path to a single applicant fixture JSON. Absolute or relative "
+            "to the project root. When set, skips directory match selection."
+        ),
+    )
+    dev_auto_stamp_fixture_dir: Path = Field(
+        default=_PROJECT_ROOT / "fixtures" / "applicant-data",
+        description=(
+            "Directory of applicant fixtures. Each file may declare a ``match`` list "
+            "matched against the job source filename. Used when "
+            "dev_auto_stamp_fixture is empty."
+        ),
+    )
+    dev_auto_stamp_mode: str = Field(
+        default="both",
+        description='What to stamp after grounding: "images", "pdf", or "both".',
+    )

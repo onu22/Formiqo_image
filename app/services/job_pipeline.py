@@ -105,6 +105,17 @@ def run_full_job_pipeline(
                 output_dir=output_dir,
                 settings=settings,
             )
+
+        # Dev/test: stamp with fixture values after final boxes exist. Never fail the job.
+        if settings.dev_auto_stamp_after_grounding:
+            run_dev_auto_stamp_background(
+                job_id=job_id,
+                job_root=job_root,
+                input_pdf=input_pdf,
+                output_dir=output_dir,
+                settings=settings,
+                source_filename=source_filename,
+            )
     except SemanticGroundingJobError as exc:
         LOG.warning("job pipeline grounding failed job_id=%s: %s", job_id, exc)
         manifest = read_job_manifest(job_root)
@@ -146,6 +157,31 @@ def run_qa_refine_background(
             update_job_stage(job_root, "qa_refine", status="failed", error=str(exc))
         except FileNotFoundError:
             pass
+
+
+def run_dev_auto_stamp_background(
+    *,
+    job_id: str,
+    job_root: Path,
+    input_pdf: Path,
+    output_dir: Path,
+    settings: Settings,
+    source_filename: str,
+) -> None:
+    """Apply fixture values + stamp after grounding; isolate failures from job readiness."""
+    from app.services.dev_auto_stamp import run_dev_auto_stamp_after_grounding
+
+    try:
+        run_dev_auto_stamp_after_grounding(
+            job_id=job_id,
+            job_root=job_root,
+            input_pdf=input_pdf,
+            output_dir=output_dir,
+            settings=settings,
+            source_filename=source_filename,
+        )
+    except Exception as exc:  # noqa: BLE001 - never fail a ready job for a dev stamp hook
+        LOG.warning("dev auto-stamp failed job_id=%s: %s", job_id, exc)
 
 
 def delete_job_tree(job_root: Path) -> None:
